@@ -18,3 +18,15 @@ def test_read_todos(mocker):
     assert response.status_code == 200
     assert response.json() == mock_data
     mock_get_tasks.assert_called_once()
+
+
+def test_complete_todo_success(mocker):
+    mock_complete_task = mocker.patch("app.services.todoist_service.complete_task")
+    mock_complete_task.return_value = True
+
+    task_id = "1"
+    response = client.post(f"/todos/{task_id}/complete")
+
+    assert response.status_code == 200
+    assert response.json() == {"status": "Task completed"}
+    mock_complete_task.assert_called_once_with(task_id)

@@ -1,10 +1,11 @@
+from typing import List
 from fastapi import APIRouter, HTTPException
 from app.services import todoist_service
-from pydantic import BaseModel
+from app.schemas import TodoTask
 
 router = APIRouter()
 
-@router.get("/todos")
+@router.get("/todos", response_model=List[TodoTask])
 def read_todos():
     return todoist_service.get_all_tasks()
 
