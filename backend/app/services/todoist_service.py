@@ -11,7 +11,7 @@ def get_all_tasks():
     try:
         # Fetch all tasks with the label "#Dashboard"
         # Returns a paginator to handle large number of tasks
-        paginator = api.get_tasks(label="#Dashboard")
+        paginator = api.get_tasks()
         all_tasks = []
         for page in paginator:
             all_tasks.extend(page)

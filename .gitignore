@@ -3,3 +3,17 @@ __pycache__/
 *.pyc
 .env
 .DS_Store
+Thumbs.db
+.vscode/
+.idea/
+# --- Frontend ---
+frontend/node_modules/
+frontend/dist/
+frontend/dist-ssr/
+frontend/.env.local
+frontend/.env.*.local
+frontend/npm-debug.log*
+frontend/yarn-debug.log*
+frontend/yarn-error.log*
+frontend/pnpm-debug.log*
+frontend/coverage/
