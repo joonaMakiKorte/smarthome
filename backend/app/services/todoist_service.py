@@ -21,7 +21,7 @@ def get_all_tasks():
             TodoTask(
                 id=task.id,
                 content=task.content,
-                completed=task.is_completed
+                priority=task.priority
             )
             for task in all_tasks
         ]
@@ -43,7 +43,7 @@ def complete_task(task_id: str):
     
 def reopen_task(task_id: str):
     try:
-        return api.reopen_task(task_id)
+        return api.uncomplete_task(task_id)
     except Exception as e:
         print(f"Error reopening task {task_id}: {e}")
         return False

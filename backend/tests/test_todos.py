@@ -1,12 +1,11 @@
-from fastapi.testclient import TestClient
 from app.main import app
 from app.models import CompletedTask
 from app.database import get_session
 from datetime import datetime
 
-client = TestClient(app)
 
-def test_read_todos(mocker):
+def test_read_todos(client, mocker):
+    """Test fetching current todos"""
     mock_data = [
         {"id": "1", "content": "Test Task 1", "priority": 3},
         {"id": "2", "content": "Test Task 2", "priority": 4},
@@ -23,37 +22,25 @@ def test_read_todos(mocker):
     mock_get_tasks.assert_called_once()
 
 
-def test_read_completed_todos(mocker):
-    mock_session = mocker.MagicMock()
-
-    mock_data = [
-        CompletedTask(id="1", content="Completed Task 1", priority=2, completed_at=datetime.utcnow()),
-        CompletedTask(id="2", content="Completed Task 2", priority=1, completed_at=datetime.utcnow())
-    ]
-    # Mock the database query chain
-    mock_session.exec.return_value.all.return_value = mock_data
-
-    # Override the get_session dependency to use the mock session
-    app.dependency_overrides[get_session] = lambda: mock_session
+def test_read_completed_todos(client, session):
+    """Test fetching history."""
+    task1 = CompletedTask(id="1", content="Completed Task 1", priority=2, completed_at=datetime.utcnow())
+    task2 = CompletedTask(id="2", content="Completed Task 2", priority=1, completed_at=datetime.utcnow())
+    session.add(task1)
+    session.add(task2)
+    session.commit()
 
     response = client.get("/todos/completed")
 
     assert response.status_code == 200
     assert len(response.json()) == 2
-    assert response.json()[0]["id"] == "1"
-
-    # Clean up dependency override
-    app.dependency_overrides = {}
+    assert response.json()[0]["id"] == "2"
 
 
-def test_complete_todo_success(mocker):
+def test_complete_todo_success(client, session, mocker):
+    """Test completing a todo successfully."""
     mock_complete_task = mocker.patch("app.services.todoist_service.complete_task")
     mock_complete_task.return_value = True
-
-    mock_session = mocker.MagicMock()
-    mock_session.exec.return_value.one.return_value = 5 # Simulate 5 completed tasks in DB to not trigger deletion
-
-    app.dependency_overrides[get_session] = lambda: mock_session
 
     task_id = "1"
     params = {
@@ -66,38 +53,30 @@ def test_complete_todo_success(mocker):
     assert response.status_code == 200
     assert response.json() == {"status": "Task completed"}
 
+    saved_task = session.get(CompletedTask, task_id)
+    assert saved_task is not None
+    assert saved_task.content == "Test Task"
+
     mock_complete_task.assert_called_once_with(task_id)
 
-    # Verify that the completed task was added to the session and committed
-    mock_session.add.assert_called_once()
-    mock_session.commit.assert_called()
 
-    # Clean up dependency override
-    app.dependency_overrides = {}
+def test_reopen_todo_success(client, session, mocker):
+    """Test reopening a completed todo successfully."""
+    task_id = "999"
+    existing_task = CompletedTask(id=task_id, content="Reopen Me", priority=1)
+    session.add(existing_task)
+    session.commit()
 
-
-def test_reopen_todo_success(mocker):
     mock_reopen_task = mocker.patch("app.services.todoist_service.reopen_task")
     mock_reopen_task.return_value = True
 
-    mock_session = mocker.MagicMock()
-
-    fake_completed_task = CompletedTask(id="1", content="Completed Task", priority=2, completed_at=datetime.utcnow())
-    mock_session.get.return_value = fake_completed_task
-
-    app.dependency_overrides[get_session] = lambda: mock_session
-
-    task_id = "123"
     response = client.post(f"/todos/{task_id}/reopen")
 
     assert response.status_code == 200
     assert response.json() == {"status": "Task reopened"}
 
+    # Verify task is removed from local DB
+    reopened_task = session.get(CompletedTask, task_id)
+    assert reopened_task is None
+
     mock_reopen_task.assert_called_once_with(task_id)
-
-    # Verify that the completed task was deleted from the session and committed
-    mock_session.delete.assert_called_once_with(fake_completed_task)
-    mock_session.commit.assert_called()
-
-    # Clean up dependency override
-    app.dependency_overrides = {}
