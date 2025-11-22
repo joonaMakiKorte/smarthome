@@ -54,7 +54,10 @@ def complete_todo(
     return {"status": "Task completed"}
 
 @router.post("/todos/{task_id}/reopen")
-def reopen_todo(task_id: str, session: Session = Depends(get_session)):
+def reopen_todo(
+    task_id: str,
+    session: Session = Depends(get_session)
+):
     """Reopen a completed todo task in Todoist and remove it from the local database."""
     success = todoist_service.reopen_task(task_id)
     if not success:
