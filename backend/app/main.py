@@ -2,8 +2,15 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import todos
+from contextlib import asynccontextmanager
+from app.database import create_db_and_tables
 
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    create_db_and_tables()
+    yield
+
+app = FastAPI(lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -12,7 +19,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
 
 app.include_router(todos.router)
 

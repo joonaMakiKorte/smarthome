@@ -3,4 +3,4 @@ from pydantic import BaseModel
 class TodoTask(BaseModel):
     id: str
     content: str
-    completed: bool
+    priority: int # (4=highest, 1=lowest)

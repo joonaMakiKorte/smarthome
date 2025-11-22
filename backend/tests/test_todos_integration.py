@@ -19,9 +19,9 @@ def temp_task():
     """
     Create a real task in Todoist before the test and delete it after the test.
     """
-    # label #Dashboard must exist in the Todoist account for this to work
+    # label "Dashboard" must exist in the Todoist account for this to work
     task = todoist.add_task(content="Test Task for Integration Test #Dashboard",
-                            due_string="today", labels=["#Dashboard"])
+                            due_string="today", labels=["Dashboard"])
     yield task
 
     try:
