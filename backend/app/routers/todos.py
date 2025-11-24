@@ -9,9 +9,9 @@ from app.models import CompletedTask
 router = APIRouter()
 
 @router.get("/todos", response_model=List[TodoTask])
-def read_todos():
+async def read_todos():
     """Fetch all active todos from Todoist."""
-    return todoist_service.get_all_tasks()
+    return await todoist_service.get_all_tasks()
 
 @router.get("/todos/completed", response_model=List[CompletedTask])
 def read_completed_todos(session: Session = Depends(get_session)):

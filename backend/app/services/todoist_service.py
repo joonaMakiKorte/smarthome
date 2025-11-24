@@ -1,19 +1,20 @@
 from app.schemas import TodoTask
-from todoist_api_python.api import TodoistAPI
+from typing import List
+from todoist_api_python.api_async import TodoistAPIAsync
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-api = TodoistAPI(os.getenv("TODOIST_API_KEY"))
+api = TodoistAPIAsync(os.getenv("TODOIST_API_KEY"))
 
-def get_all_tasks():
+async def get_all_tasks() -> List[TodoTask]:
     try:
         # Fetch all tasks with the label "Dashboard"
         # Returns a paginator to handle large number of tasks
-        paginator = api.get_tasks(label="Dashboard")
+        paginator = await api.get_tasks(label="Dashboard")
         all_tasks = []
-        for page in paginator:
+        async for page in paginator:
             all_tasks.extend(page)
 
         # Map Todoist tasks to TodoTask schema
@@ -34,16 +35,16 @@ def get_all_tasks():
         print(f"Error fetching tasks: {e}")
         return []
     
-def complete_task(task_id: str):
+async def complete_task(task_id: str):
     try:
-        return api.complete_task(task_id)
+        return await api.complete_task(task_id)
     except Exception as e:
         print(f"Error completing task {task_id}: {e}")
         return False
     
-def reopen_task(task_id: str):
+async def reopen_task(task_id: str):
     try:
-        return api.uncomplete_task(task_id)
+        return await api.uncomplete_task(task_id)
     except Exception as e:
         print(f"Error reopening task {task_id}: {e}")
         return False

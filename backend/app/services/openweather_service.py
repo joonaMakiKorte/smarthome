@@ -1,24 +1,42 @@
 import os
 import httpx
+from typing import List
 from dotenv import load_dotenv
-from app.services import geocoding_service
-from app.config import load_config, update_location
+from app.schemas import HourlyWeather
+from datetime import datetime
 
 load_dotenv()
 
 API_KEY = os.getenv("OPENWEATHER_API_KEY")
+LAT = os.getenv("LAT")
+LON = os.getenv("LON")
 
-async def get_coordinates():
-    """Get coordinates from the config or use geocoding service to fetch them."""
-    config = load_config()
-    if config.location.lat is not None and config.location.lon is not None:
-        return config.location.lat, config.location.lon
+# URL for 24-hour forecast data in metric units
+url = f"https://pro.openweathermap.org/data/2.5/forecast/hourly?lat={LAT}&lon={LON}&appid={API_KEY}&units=metric&cnt=24"
 
-    # Use geocoding service to fetch coordinates
-    print("Config missing geolocation data, fetching...")
-    geo_data = await geocoding_service.get_geolocation()
+async def get_weather_data() -> List[HourlyWeather]:
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url)
+            response.raise_for_status()
+            data = response.json()
 
-    # Save to config for future use
-    update_location(geo_data.lat, geo_data.lon, geo_data.name, geo_data.country) 
+        # Parse the hourly weather data
+        hourly_weather = []
+        for entry in data.get("list", []):
+            timestamp = datetime.fromtimestamp(entry.get("dt",0)).strftime('%H')
+            temperature = entry.get("main", {}).get("temp", 0.0)
+            icon_code = entry.get("weather", [{}])[0].get("icon", "")
+            icon_url = f"https://openweathermap.org/img/wn/{icon_code}@2x.png" # Construct icon URL
+            hourly_weather.append(HourlyWeather(
+                timestamp=int(timestamp),
+                temperature=temperature,
+                icon_code=icon_code,
+                icon_url=icon_url
+            ))
+        return hourly_weather
 
-    return geo_data.lat, geo_data.lon
+    except Exception as e:
+        print(f"Error fetching weather data: {e}")
+        return []
+    

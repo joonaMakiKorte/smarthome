@@ -6,9 +6,9 @@ class TodoTask(BaseModel):
     content: str
     priority: int # (4=highest, 1=lowest)
 
-class GeoLocation(BaseModel):
-    """Schema for geolocation data."""
-    name: str
-    lat: float
-    lon: float
-    country: str
+class HourlyWeather(BaseModel):
+    """Schema for hourly weather data."""
+    timestamp: int # UNIX timestamp formatted to hour
+    temperature: float
+    icon_code: str # e.g., "10d"
+    icon_url: str # Full URL to the weather icon
