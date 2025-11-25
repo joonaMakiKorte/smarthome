@@ -19,8 +19,8 @@ async def test_get_real_hourly_weather(async_client):
     first_entry = weather_data[0]
     assert "timestamp" in first_entry
     assert "temperature" in first_entry
-    assert "icon_code" in first_entry
-    assert "icon_url" in first_entry
+    assert "iconCode" in first_entry
+    assert "iconUrl" in first_entry
 
 @pytest.mark.integration
 @pytest.mark.asyncio
@@ -34,9 +34,9 @@ async def test_get_real_current_weather(async_client):
     current_weather = response.json()
 
     assert "temperature" in current_weather
-    assert "temperature_feels_like" in current_weather
+    assert "temperatureFeelsLike" in current_weather
     assert "humidity" in current_weather
-    assert "wind_speed" in current_weather
+    assert "windSpeed" in current_weather
     assert "description" in current_weather
-    assert "icon_code" in current_weather
-    assert "icon_url" in current_weather
+    assert "iconCode" in current_weather
+    assert "iconUrl" in current_weather

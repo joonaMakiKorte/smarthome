@@ -7,8 +7,8 @@ async def test_get_hourly_weather(async_client, mocker):
         {
             "timestamp": 10,
             "temperature": 15.5,
-            "icon_code": "01d",
-            "icon_url": "https://"
+            "iconCode": "01d",
+            "iconUrl": "https://"
         }]
     mock_get_weather_data = mocker.patch(
         "app.services.openweather_service.get_hourly_weather_data"
@@ -26,11 +26,12 @@ async def test_get_current_weather(async_client, mocker):
     """Test fetching current weather data from OpenWeather."""
     mock_data = {
         "temperature": 20.0,
-        "temperature_feels_like": 19.5,
+        "temperatureFeelsLike": 19.5,
         "humidity": 60,
-        "wind_speed": 5.0,
-        "icon_code": "02d",
-        "icon_url": "https://"
+        "windSpeed": 5.0,
+        "description": "clear sky",
+        "iconCode": "02d",
+        "iconUrl": "https://"
     }
     mock_get_current_weather_data = mocker.patch(
         "app.services.openweather_service.get_current_weather_data"
