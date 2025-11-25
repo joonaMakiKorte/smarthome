@@ -92,3 +92,4 @@ async def test_reopen_real_task(async_client, session, temp_task):
         assert task_on_server.completed is False
     except Exception:
         pass
+    

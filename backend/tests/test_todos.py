@@ -1,6 +1,6 @@
 import pytest
 from app.models import CompletedTask
-from datetime import datetime
+from datetime import datetime, timedelta
 
 @pytest.mark.asyncio
 async def test_read_todos(async_client, mocker):
@@ -23,7 +23,8 @@ async def test_read_todos(async_client, mocker):
 
 def test_read_completed_todos(sync_client, session):
     """Test fetching history."""
-    task1 = CompletedTask(id="1", content="Completed Task 1", priority=2, completed_at=datetime.utcnow())
+    # Create sample tasks with different completion times to ensure sorting
+    task1 = CompletedTask(id="1", content="Completed Task 1", priority=2, completed_at=datetime.utcnow()-timedelta(minutes=10))
     task2 = CompletedTask(id="2", content="Completed Task 2", priority=1, completed_at=datetime.utcnow())
     session.add(task1)
     session.add(task2)
@@ -38,7 +39,7 @@ def test_read_completed_todos(sync_client, session):
 @pytest.mark.asyncio
 async def test_complete_todo_success(async_client, session, mocker):
     """Test completing a todo successfully."""
-    mock_complete_task = mocker.patch("app.services.todoist_service.complete_task")
+    mock_complete_task = mocker.patch("app.services.todoist_service.api.complete_task")
     mock_complete_task.return_value = True
 
     task_id = "1"
@@ -66,7 +67,7 @@ async def test_reopen_todo_success(async_client, session, mocker):
     session.add(existing_task)
     session.commit()
 
-    mock_reopen_task = mocker.patch("app.services.todoist_service.reopen_task")
+    mock_reopen_task = mocker.patch("app.services.todoist_service.api.uncomplete_task")
     mock_reopen_task.return_value = True
 
     response = await async_client.post(f"/todos/{task_id}/reopen")

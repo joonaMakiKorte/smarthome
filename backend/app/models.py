@@ -2,6 +2,7 @@ from sqlmodel import SQLModel, Field
 from datetime import datetime
 
 class CompletedTask(SQLModel, table=True):
+    """Database model for a completed todo task."""
     id: str = Field(primary_key=True, description="Unique ID from Todoist")
     content: str = Field(description="The task description/title")
     priority: int = Field(
@@ -10,5 +11,11 @@ class CompletedTask(SQLModel, table=True):
         description="Priority level: 4 (Very Urgent) to 1 (Natural)")
     completed_at: datetime = Field(
         default_factory=datetime.utcnow,
-        description="UTC Timestamp when the task was completed",
-        alias="completedAt")
+        description="UTC Timestamp when the task was completed")
+    
+class ElectricityPrice(SQLModel, table=True):
+    """Database model for electricity price data."""
+    start_time: datetime = Field(primary_key=True, description="Start time of the price interval in UTC+2")
+    end_time: datetime = Field(description="End time of the price interval in UTC+2")
+    price: float = Field(description="Electricity price in CT/kWh")
+
