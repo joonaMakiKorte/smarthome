@@ -12,7 +12,7 @@ class TodoTask(BaseModel):
 
 class HourlyWeather(BaseModel):
     """Schema for hourly weather data."""
-    timestamp: int = Field(..., ge=0, description="Hour of the day (0-23) or UNIX timestamp")
+    timestamp: int = Field(..., ge=0, description="UNIX timestamp")
     temperature: float = Field(..., description="Temperature in Celsius")
     icon_code: str = Field(..., description="OWM icon code")
     icon_url: str = Field(..., description="Full URL to the weather icon image")
@@ -27,3 +27,13 @@ class CurrentWeather(BaseModel):
     icon_code: str = Field(..., description="OWM icon code")
     icon_url: str = Field(..., description="Full URL to the weather icon image")
     
+class ElectricityPriceInterval(BaseModel):
+    """Schema for electricity price response."""
+    time: datetime = Field(..., description="Start time of the price interval in UTC")
+    price: float = Field(..., ge=0, description="Electricity price of interval in CT/kWh")
+
+class AvgElectricityPrice(BaseModel):
+    """Schema for average electricity price in given time window."""
+    start_window: datetime = Field(..., description="Start time of the average price window")
+    end_window: datetime = Field(..., description="End time of the average price window")
+    average_price: float = Field(..., ge=0, description="Average electricity price")

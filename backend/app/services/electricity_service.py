@@ -1,23 +1,17 @@
 import httpx
 from app.models import ElectricityPrice
-from app.database import get_session
-from zoneinfo import ZoneInfo
-from datetime import datetime
-from sqlmodel import Session
-from fastapi import Depends
+from app.schemas import ElectricityPriceInterval
+from datetime import datetime, timedelta, timezone
+from sqlmodel import Session, select, func, delete
+from typing import Literal, List
 
 url = "https://api.porssisahko.net/v2/latest-prices.json"
-FINLAND_TZ = ZoneInfo("Europe/Helsinki")
 
-def convert_to_helsinki_time(utc_datetime: datetime) -> datetime:
-    """Converts a UTC datetime to Helsinki time."""
-    # Ensure the input datetime is timezone-aware
-    if utc_datetime.tzinfo is None:
-        utc_datetime = utc_datetime.replace(tzinfo=ZoneInfo("UTC"))
-    return utc_datetime.astimezone(FINLAND_TZ)
-
-async def fetch_and_store_electricity_prices(session: Session = Depends(get_session)):
-    """Fetches electricity prices from API and saves to DB (Upsert)."""
+async def fetch_and_store_electricity_prices(session: Session):
+    """
+    Fetches electricity prices from API and saves to DB (Upsert).
+    Handles deletion of electricity data older than 10 days.
+    """
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(url)
@@ -25,15 +19,81 @@ async def fetch_and_store_electricity_prices(session: Session = Depends(get_sess
             data = response.json()
 
         for entry in data["prices"]:
-            start = datetime.fromisoformat(entry["startDate"].replace("Z", "+00:00"))
-            end = datetime.fromisoformat(entry["endDate"].replace("Z", "+00:00"))
-
             session.merge(ElectricityPrice(
-                start_time=convert_to_helsinki_time(start),
-                end_time=convert_to_helsinki_time(end),
+                start_time=datetime.fromisoformat(entry["startDate"].replace("Z", "+00:00")),
+                end_time=datetime.fromisoformat(entry["endDate"].replace("Z", "+00:00")),
                 price=entry["price"]
             ))
+
+        # Old data cleanup
+        cutoff_time = datetime.now(tz=timezone.utc) - timedelta(days=10)
+        statement = delete(ElectricityPrice).where(ElectricityPrice.start_time < cutoff_time)
+        session.exec(statement)
+
         session.commit()
 
     except Exception as e:
         print(f"Error fetching or storing electricity prices: {e}")
+
+def get_electricity_prices(session: Session, mode: Literal["15min", "1h"] = "15min") -> List[ElectricityPriceInterval]:
+    """
+    Fetches prices for Today (00:00) through Tomorrow (23:59)
+    Default 15min intervals, aggregate to 1h average if requested.
+    """
+    now = datetime.now(tz=timezone.utc)
+    start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    end_of_window = start_of_today + timedelta(days=2)
+
+    # Query for electricity prices
+    statement = (
+        select(ElectricityPrice)
+        .where(ElectricityPrice.start_time >= start_of_today)
+        .where(ElectricityPrice.start_time < end_of_window)
+        .order_by(ElectricityPrice.start_time)
+    )
+    results = session.exec(statement).all()
+
+    # Return results immediately if is 15min mode
+    if mode == "15min":
+        return [ElectricityPriceInterval(
+            time=p.start_time,
+            price=p.price
+        ) for p in results
+    ]
+
+    if mode == "1h":
+        hourly_data = []
+
+        # Group prices into dictionary, keyed by hour
+        grouped = {}
+        for row in results:
+            # Truncate minutes to 00
+            hour_key = row.start_time.replace(minute=0, second=0, microsecond=0)
+            if hour_key not in grouped:
+                grouped[hour_key] = []
+            grouped[hour_key].append(row.price)
+
+        # Get averages
+        for start_time, prices in grouped.items():
+            avg_price = sum(prices) / len(prices)
+
+            hourly_data.append(ElectricityPriceInterval(
+                time=start_time,
+                price=avg_price
+            ))
+        return hourly_data
+    
+def calculate_10_day_avg(session: Session) -> float:
+    """Get the average price from 10 days."""
+    now = datetime.now(tz=timezone.utc)
+    ten_days_ago = now - timedelta(days=10)
+
+    # Aggregation Query
+    statement = (
+        select(func.avg(ElectricityPrice.price))
+        .where(ElectricityPrice.start_time >= ten_days_ago)
+        .where(ElectricityPrice.start_time < now)
+    )
+    avg_price = session.exec(statement).first()
+    return avg_price if avg_price is not None else 0.0
+    

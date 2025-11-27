@@ -1,5 +1,6 @@
 import pytest
 
+# pytest tests/test_openweather.py::test_get_hourly_weather
 @pytest.mark.asyncio
 async def test_get_hourly_weather(async_client, mocker):
     """Test fetching hourly weather data from OpenWeather."""
@@ -21,6 +22,7 @@ async def test_get_hourly_weather(async_client, mocker):
     assert response.json() == mock_data
     mock_get_weather_data.assert_called_once()
 
+# pytest tests/test_openweather.py::test_get_current_weather
 @pytest.mark.asyncio
 async def test_get_current_weather(async_client, mocker):
     """Test fetching current weather data from OpenWeather."""

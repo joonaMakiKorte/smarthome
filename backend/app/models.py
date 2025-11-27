@@ -1,5 +1,5 @@
 from sqlmodel import SQLModel, Field
-from datetime import datetime
+from datetime import datetime, timezone
 
 class CompletedTask(SQLModel, table=True):
     """Database model for a completed todo task."""
@@ -10,12 +10,12 @@ class CompletedTask(SQLModel, table=True):
         le=4,
         description="Priority level: 4 (Very Urgent) to 1 (Natural)")
     completed_at: datetime = Field(
-        default_factory=datetime.utcnow,
+        default_factory=lambda: datetime.now(tz=timezone.utc),
         description="UTC Timestamp when the task was completed")
     
 class ElectricityPrice(SQLModel, table=True):
     """Database model for electricity price data."""
-    start_time: datetime = Field(primary_key=True, description="Start time of the price interval in UTC+2")
-    end_time: datetime = Field(description="End time of the price interval in UTC+2")
+    start_time: datetime = Field(primary_key=True, description="Start time of the price interval in UTC")
+    end_time: datetime = Field(description="End time of the price interval in UTC")
     price: float = Field(description="Electricity price in CT/kWh")
 

@@ -3,14 +3,13 @@ import httpx
 from typing import List
 from dotenv import load_dotenv
 from app.schemas import HourlyWeather, CurrentWeather
-from datetime import datetime
+from datetime import datetime, timezone
 
 load_dotenv()
 
 API_KEY = os.getenv("OPENWEATHER_API_KEY")
 LAT = os.getenv("LAT")
 LON = os.getenv("LON")
-
 # URL for one call API
 url = f"https://api.openweathermap.org/data/3.0/onecall?lat={LAT}&lon={LON}&units=metric&appid={API_KEY}"
 
@@ -29,7 +28,7 @@ async def get_hourly_weather_data() -> List[HourlyWeather]:
         for entry in raw_data:
             icon_code = entry.get("weather", [{}])[0].get("icon", "")
             hourly_weather.append(HourlyWeather(
-                timestamp = int(datetime.fromtimestamp(entry.get("dt",0)).strftime('%H')), # Extract hour from UNIX timestamp
+                timestamp = datetime.fromtimestamp(entry.get("dt",0), tz=timezone.utc), # Extract UNIX datetime
                 temperature = float(entry.get("temp", 0.0)),
                 icon_code = icon_code,
                 icon_url = f"https://openweathermap.org/img/wn/{icon_code}@2x.png" # Construct icon URL

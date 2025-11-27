@@ -1,7 +1,7 @@
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from app.routers import todos, openweather
+from app.routers import todos, openweather, electricity
 from contextlib import asynccontextmanager
 from app.database import create_db_and_tables
 
@@ -22,6 +22,7 @@ app.add_middleware(
 
 app.include_router(todos.router)
 app.include_router(openweather.router)
+app.include_router(electricity.router)
 
 @app.get("/")
 async def read_root():
