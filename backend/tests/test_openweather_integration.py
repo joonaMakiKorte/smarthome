@@ -23,7 +23,7 @@ async def test_get_real_hourly_weather(async_client):
     assert "icon_code" in first_entry
     assert "icon_url" in first_entry
 
-# pytest tests/test_openweather.py::test_get_real_current_weather
+# pytest tests/test_openweather_integration.py::test_get_real_current_weather
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_get_real_current_weather(async_client):
