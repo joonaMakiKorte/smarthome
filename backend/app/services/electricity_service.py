@@ -23,7 +23,7 @@ async def fetch_and_store_electricity_prices(session: Session):
             session.merge(ElectricityPrice(
                 start_time=datetime.fromisoformat(entry["startDate"].replace("Z", "+00:00")),
                 end_time=datetime.fromisoformat(entry["endDate"].replace("Z", "+00:00")),
-                price=entry["price"]
+                price=entry["price"] if entry["price"] >= 0 else 0.0
             ))
 
         # Old data cleanup
