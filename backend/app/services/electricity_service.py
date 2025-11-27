@@ -12,12 +12,13 @@ async def fetch_and_store_electricity_prices(session: Session):
     Fetches electricity prices from API and saves to DB (Upsert).
     Handles deletion of electricity data older than 10 days.
     """
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(url)
-            response.raise_for_status()
-            data = response.json()
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+        response.raise_for_status()
+        data = response.json()
 
+    # Write to db
+    try:
         for entry in data["prices"]:
             session.merge(ElectricityPrice(
                 start_time=datetime.fromisoformat(entry["startDate"].replace("Z", "+00:00")),
@@ -33,7 +34,11 @@ async def fetch_and_store_electricity_prices(session: Session):
         session.commit()
 
     except Exception as e:
-        print(f"Error fetching or storing electricity prices: {e}")
+        # Rollback to ensure no partial data is left
+        session.rollback()
+        print(f"Database error during electricity update: {e}")
+        raise e 
+
 
 def get_electricity_prices(session: Session, mode: Literal["15min", "1h"] = "15min") -> List[ElectricityPriceInterval]:
     """
@@ -83,6 +88,7 @@ def get_electricity_prices(session: Session, mode: Literal["15min", "1h"] = "15m
             ))
         return hourly_data
     
+
 def calculate_10_day_avg(session: Session) -> float:
     """Get the average price from 10 days."""
     now = datetime.now(tz=timezone.utc)

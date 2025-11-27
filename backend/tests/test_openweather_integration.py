@@ -1,6 +1,5 @@
 import pytest
 from typing import List
-from app.schemas import HourlyWeather
 
 # pytest tests/test_openweather_integration.py::test_get_real_hourly_weather
 @pytest.mark.integration

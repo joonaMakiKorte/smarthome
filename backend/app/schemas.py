@@ -12,7 +12,7 @@ class TodoTask(BaseModel):
 
 class HourlyWeather(BaseModel):
     """Schema for hourly weather data."""
-    timestamp: int = Field(..., ge=0, description="UNIX timestamp")
+    timestamp: datetime = Field(..., ge=0, description="Timestamp in UTC")
     temperature: float = Field(..., description="Temperature in Celsius")
     icon_code: str = Field(..., description="OWM icon code")
     icon_url: str = Field(..., description="Full URL to the weather icon image")
