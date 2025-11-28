@@ -6,7 +6,7 @@ __pycache__/
 Thumbs.db
 .vscode/
 .idea/
-# --- Frontend ---
+.db
 frontend/node_modules/
 frontend/dist/
 frontend/dist-ssr/
