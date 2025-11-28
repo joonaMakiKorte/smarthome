@@ -4,7 +4,6 @@ from app.models import ElectricityPrice
 from sqlmodel import select
 
 # pytest tests/test_electricity_integration.py::test_refresh_real_electricity_prices
-@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_refresh_real_electricity_prices(async_client, session):
     """Test fetching real electricity price data."""

@@ -48,7 +48,7 @@ def remove_stock(symbol: str, session: Session = Depends(get_session)):
 async def get_stock_quotes(symbols: str = Query(..., description="Comma separated symbols, e.g. 'AAPL' or 'AAPL,MSFT'")):
     """Get real-time stock quotes from Twelve Data"""
     async with handle_upstream_errors("Twelve Data"):
-        return await stocks_service.get_realtime_market_data()
+        return await stocks_service.get_realtime_market_data(symbols)
     
 @router.get("/stocks/history", response_model=List[StockHistoryData])
 async def get_historical_data(
@@ -58,5 +58,5 @@ async def get_historical_data(
 ):
     """Get historical data for stocks."""
     async with handle_upstream_errors("Twelve Data"):
-        return await stocks_service.get_stock_history()
+        return await stocks_service.get_stock_history(symbols,interval,count)
     

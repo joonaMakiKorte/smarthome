@@ -29,7 +29,6 @@ async def temp_task():
         print(f"Error deleting task {task.id}: {e}")
 
 # pytest tests/test_todos_integration.py::test_fetch_real_tasks
-@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_fetch_real_tasks(async_client, temp_task):
     """
@@ -43,7 +42,6 @@ async def test_fetch_real_tasks(async_client, temp_task):
     assert any(t["id"] == temp_task.id for t in tasks), "Temp task not found in fetched tasks"
 
 # pytest tests/test_todos_integration.py::test_complete_real_task
-@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_complete_real_task(async_client, session, temp_task):
     """
@@ -68,7 +66,6 @@ async def test_complete_real_task(async_client, session, temp_task):
         pass
 
 # pytest tests/test_todos_integration.py::test_reopen_real_task
-@pytest.mark.integration
 @pytest.mark.asyncio
 async def test_reopen_real_task(async_client, session, temp_task):
     """
