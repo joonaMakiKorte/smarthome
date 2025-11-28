@@ -19,3 +19,8 @@ class ElectricityPrice(SQLModel, table=True):
     end_time: datetime = Field(description="End time of the price interval in UTC")
     price: float = Field(description="Electricity price in CT/kWh")
 
+class StockSymbol(SQLModel, table=True):
+    """Database model for a stock in watchlist."""
+    symbol: str = Field(primary_key=True, description="Symbol ticker of the instrument")
+    name: str | None = Field("Name of the stock")
+    
