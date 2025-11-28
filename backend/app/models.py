@@ -22,5 +22,5 @@ class ElectricityPrice(SQLModel, table=True):
 class StockSymbol(SQLModel, table=True):
     """Database model for a stock in watchlist."""
     symbol: str = Field(primary_key=True, description="Symbol ticker of the instrument")
-    name: str | None = Field("Name of the stock")
+    name: str | None = Field(default=None, description="Name of the stock")
     

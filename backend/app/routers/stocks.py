@@ -30,7 +30,7 @@ def add_stock(stock: StockSymbol, session: Session = Depends(get_session)):
             detail="Stock already exists"
         )
     
-@router.delete("/stocks/{symbol}")
+@router.delete("/stocks/watchlist/{symbol}")
 def remove_stock(symbol: str, session: Session = Depends(get_session)):
     """Delete a stock from watchlist"""
     stock = session.get(StockSymbol, symbol)
@@ -58,5 +58,5 @@ async def get_historical_data(
 ):
     """Get historical data for stocks."""
     async with handle_upstream_errors("Twelve Data"):
-        return await stocks_service.get_stock_history
+        return await stocks_service.get_stock_history()
     

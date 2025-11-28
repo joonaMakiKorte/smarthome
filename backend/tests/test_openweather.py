@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime
 
 # pytest tests/test_openweather.py::test_get_hourly_weather
 @pytest.mark.asyncio
@@ -6,7 +7,7 @@ async def test_get_hourly_weather(async_client, mocker):
     """Test fetching hourly weather data from OpenWeather."""
     mock_data = [
         {
-            "timestamp": 10,
+            "timestamp": datetime.now().isoformat(),
             "temperature": 15.5,
             "icon_code": "01d",
             "icon_url": "https://"
