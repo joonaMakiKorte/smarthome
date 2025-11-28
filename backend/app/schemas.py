@@ -1,5 +1,6 @@
 from pydantic import BaseModel, Field
 from datetime import datetime
+from typing import List
 
 class TodoTask(BaseModel):
     """Schema for an active todo task."""
@@ -48,3 +49,13 @@ class StockQuoteData(BaseModel):
     high: float = Field(...,ge=0, description="Daily high price in USD")
     low: float = Field(...,ge=0, description="Daily low price in USD")
     volume: int = Field(...,ge=0, description="Volume/action in stock") 
+
+class StockPriceEntry(BaseModel):
+    """Schema for individual data point in stock price history."""
+    time: datetime = Field(..., description="Timestamp of the recorded price")
+    price: float = Field(..., ge=0, description="Price in USD")
+
+class StockHistoryData(BaseModel):
+    """Schema for stock price history response."""
+    symbol: str = Field(..., description="Symbol ticker of the instrument")
+    history: List[StockPriceEntry] = Field(..., description="List of recorded price entries")

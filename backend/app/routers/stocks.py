@@ -4,7 +4,7 @@ from app.database import get_session
 from app.services import stocks_service
 from app.utils import handle_upstream_errors
 from typing import List
-from app.schemas import StockQuoteData
+from app.schemas import StockQuoteData, StockHistoryData
 from app.models import StockSymbol
 
 router = APIRouter()
@@ -49,4 +49,14 @@ async def get_stock_quotes(symbols: str = Query(..., description="Comma separate
     """Get real-time stock quotes from Twelve Data"""
     async with handle_upstream_errors("Twelve Data"):
         return await stocks_service.get_realtime_market_data()
+    
+@router.get("/stocks/history", response_model=List[StockHistoryData])
+async def get_historical_data(
+    symbols: str = Query(..., description="Comma separated symbols, e.g. 'AAPL' or 'AAPL,MSFT'"),
+    interval: str = Query("1day", description="Timeframe: 1min, 5min, 1h, 1day"),
+    count: int = Query(30, description="Number of data points to return")
+):
+    """Get historical data for stocks."""
+    async with handle_upstream_errors("Twelve Data"):
+        return await stocks_service.get_stock_history
     
