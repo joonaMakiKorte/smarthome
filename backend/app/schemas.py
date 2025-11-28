@@ -37,3 +37,14 @@ class AvgElectricityPrice(BaseModel):
     start_window: datetime = Field(..., description="Start time of the average price window")
     end_window: datetime = Field(..., description="End time of the average price window")
     average_price: float = Field(..., ge=0, description="Average electricity price")
+
+class StockQuoteData(BaseModel):
+    """Schema for delailed daily stock quote data."""
+    symbol: str = Field(..., description="Symbol ticker of the instrument")
+    name: str = Field(..., description="Name of the stock")
+    close: float = Field(..., ge=0, description="The current price in USD")
+    change: float = Field(..., description="Daily change in USD")
+    percent_change: float = Field(...,description="Daily change in percentages")
+    high: float = Field(...,ge=0, description="Daily high price in USD")
+    low: float = Field(...,ge=0, description="Daily low price in USD")
+    volume: int = Field(...,ge=0, description="Volume/action in stock") 

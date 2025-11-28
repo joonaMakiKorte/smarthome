@@ -1,4 +1,3 @@
-import httpx
 from typing import List
 from fastapi import APIRouter, HTTPException, Depends, status
 from sqlmodel import Session, select, func

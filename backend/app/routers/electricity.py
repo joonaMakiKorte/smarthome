@@ -1,4 +1,3 @@
-import httpx
 from fastapi import APIRouter, Depends, Query, HTTPException, status
 from app.database import get_session
 from sqlmodel import Session

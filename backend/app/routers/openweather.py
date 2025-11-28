@@ -1,4 +1,3 @@
-import httpx
 from typing import List
 from fastapi import APIRouter, HTTPException, Depends, status
 from app.services import openweather_service
