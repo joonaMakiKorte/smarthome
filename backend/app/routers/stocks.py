@@ -24,10 +24,9 @@ def add_stock(stock: StockSymbol, session: Session = Depends(get_session)):
         session.refresh(stock)
         return stock
     except Exception:
-        print("Error adding stock to watchlist")
         raise HTTPException(
             status_code=400,
-            detail="Stock already exists"
+            detail="Stock already in watchlist"
         )
     
 @router.delete("/stocks/watchlist/{symbol}")
