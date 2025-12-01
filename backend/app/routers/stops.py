@@ -38,7 +38,7 @@ def remove_stop(gtfs_id: str, session: Session = Depends(get_session)):
             detail="Stop not found")
     session.delete(stop)
     session.commit()
-    return {"status": "Stock deleted"}
+    return {"status": "Stop deleted"}
 
 @router.get("/stops/live-board", response_model=List[StopTimetable])
 async def get_live_board(

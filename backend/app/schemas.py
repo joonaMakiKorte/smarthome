@@ -64,10 +64,10 @@ class StopTimeEntry(BaseModel):
     """Schema for individual data point in stop timetable."""
     arrival_time: datetime = Field(...,description="Arrival time of transportation method in UTC")
     headsign: str = Field(..., description="Headsign of the transportation line")
-    route: str = Field(..., "Short name of the route")
+    route: str = Field(..., description="Short name of the route")
 
 class StopTimetable(BaseModel):
     """Schema for a stop timetable."""
-    id: str = Field(..., description="GTFS id of the stop")
+    gtfs_id: str = Field(..., description="GTFS id of the stop")
     name: str = Field(..., description="Name of the stop")
     timetable: List[StopTimeEntry] = Field(..., description="Main timetable of the stop")

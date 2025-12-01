@@ -1,6 +1,5 @@
 import pytest
 from app.models import StockSymbol
-from app.schemas import StockQuoteData
 from sqlmodel import select
 from datetime import datetime
 

@@ -65,7 +65,7 @@ async def _fetch_single_stop_data(client: httpx.AsyncClient, gtfs_id) -> StopTim
     stop_data = data.get("data", {}).get("stop")
     arrivals = stop_data.get("stoptimesWithoutPatterns", [])
     return StopTimetable(
-        id = gtfs_id, 
+        gtfs_id = gtfs_id, 
         name = stop_data.get("name"),
         timetable = [StopTimeEntry(
             arrival_time = _seconds_since_midnight_to_datetime(
