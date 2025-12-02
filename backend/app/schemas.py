@@ -71,3 +71,14 @@ class StopTimetable(BaseModel):
     gtfs_id: str = Field(..., description="GTFS id of the stop")
     name: str = Field(..., description="Name of the stop")
     timetable: List[StopTimeEntry] = Field(..., description="Main timetable of the stop")
+
+class SensorData(BaseModel):
+    """Schema for RuuviTag sensor data"""
+    mac: str = Field(..., description="MAC address of the sensor")
+    humidity: float = Field(..., ge=0, le=100, description="Recorded humidity percentage")
+    temperature: float = Field(..., description="Recorded temperature in celcius")
+    pressure: float = Field(..., ge=0, description="Recorder pressure in hPa")
+    battery: int = Field(..., ge=0, description="Battery voltage in mV")
+    rssi: int = Field(..., le=0, description="Received signal strength indicator")
+    time: datetime = Field(..., description="Timestamp of the recorded data")
+    
