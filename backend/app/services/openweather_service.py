@@ -13,7 +13,7 @@ LON = os.getenv("LON")
 # URL for one call API
 url = f"https://api.openweathermap.org/data/3.0/onecall?lat={LAT}&lon={LON}&units=metric&appid={API_KEY}"
 
-async def get_hourly_weather_data() -> List[HourlyWeather]:
+async def fetch_hourly_weather_data() -> List[HourlyWeather]:
     url_hourly = f"{url}&exclude=current,minutely,daily,alerts"
 
     async with httpx.AsyncClient(timeout=10.0) as client:
@@ -35,7 +35,7 @@ async def get_hourly_weather_data() -> List[HourlyWeather]:
     return hourly_weather
     
 
-async def get_current_weather_data() -> CurrentWeather:
+async def fetch_current_weather_data() -> CurrentWeather:
     url_current = f"{url}&exclude=minutely,hourly,daily,alerts"
 
     async with httpx.AsyncClient(timeout=10.0) as client:
