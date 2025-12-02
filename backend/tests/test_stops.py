@@ -58,23 +58,11 @@ def test_stop_watchlist(sync_client, session):
 
 # pytest tests/test_stops.py::test_stop_liveboard
 @pytest.mark.asyncio
-async def test_stop_liveboard(async_client, mocker):
+async def test_stop_liveboard(async_client, mocker, mock_httpx_client):
     """Test fetching liveboard data for stops"""
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.json.return_value = RAW_GRAPHQL_DATA
-    mock_response.raise_for_status.return_value = None
-
-    mock_client_instance = MagicMock()
-    mock_client_instance.post = AsyncMock(return_value=mock_response)
-    mock_client_instance.get = AsyncMock(return_value=mock_response)
-    mock_client_context = MagicMock()
-    mock_client_context.__aenter__ = AsyncMock(return_value=mock_client_instance)
-    mock_client_context.__aexit__ = AsyncMock(return_value=None)
-
-    mocker.patch(
-        "app.services.stops_service.httpx.AsyncClient",
-        return_value=mock_client_context
+    mock_client = mock_httpx_client(
+        patch_target="app.services.stops_service.httpx.AsyncClient",
+        response_data=RAW_GRAPHQL_DATA
     )
 
     response = await async_client.get("/stops/live-board?gtfs_ids=tampere:0001")
@@ -95,3 +83,4 @@ async def test_stop_liveboard(async_client, mocker):
 
     assert response.status_code == 200
     assert response.json() == expected_data
+    mock_client.post.assert_called_once()
