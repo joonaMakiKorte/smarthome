@@ -8,12 +8,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-api = TodoistAPIAsync(os.getenv("TODOIST_API_KEY"))
+API = TodoistAPIAsync(os.getenv("TODOIST_API_KEY"))
 
-async def get_all_tasks() -> List[TodoTask]:
+async def fetch_all_tasks() -> List[TodoTask]:
     # Fetch all tasks with the label "Dashboard"
     # Returns a paginator to handle large number of tasks
-    paginator = await api.get_tasks(label="Dashboard")
+    paginator = await API.get_tasks(label="Dashboard")
     all_tasks = []
     async for page in paginator:
         all_tasks.extend(page)
@@ -32,7 +32,7 @@ async def get_all_tasks() -> List[TodoTask]:
     mapped_tasks.sort(key=lambda x: x.priority, reverse=True)
     return mapped_tasks
     
-def get_completed_tasks(session: Session) -> List[CompletedTask]:
+def fetch_completed_tasks(session: Session) -> List[CompletedTask]:
     """Fetch completed tasks from the local database."""
     statement = select(CompletedTask).order_by(CompletedTask.completed_at.desc())
     results = session.exec(statement).all()
@@ -40,7 +40,7 @@ def get_completed_tasks(session: Session) -> List[CompletedTask]:
     
 async def complete_task(session: Session, task_id: str, content: str, priority: int) -> bool:
     """Call Todoist API to complete a task and log it in the local database. Enforce 10 item limit."""
-    success = await api.complete_task(task_id)
+    success = await API.complete_task(task_id)
     if not success:
         return False
     
@@ -70,7 +70,7 @@ async def complete_task(session: Session, task_id: str, content: str, priority: 
     
 async def reopen_task(session: Session, task_id: str) -> bool:
     """Call Todoist API to reopen a task and remove it from the local database."""
-    success = await api.uncomplete_task(task_id)
+    success = await API.uncomplete_task(task_id)
     if not success:
         return False
     

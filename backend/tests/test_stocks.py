@@ -2,6 +2,58 @@ import pytest
 from app.models import StockSymbol
 from sqlmodel import select
 from datetime import datetime
+from unittest.mock import MagicMock, AsyncMock
+
+# Define the raw data for tests
+RAW_QUOTE_DATA = {
+    "symbol": "AAPL",
+    "name": "Apple Inc",
+    "exchange": "NASDAQ",
+    "mic_code": "XNAS",
+    "currency": "USD",
+    "datetime": "2023-11-01",
+    "timestamp": 1698800000,
+    "open": "170.00",
+    "high": "175.00",
+    "low": "169.00",
+    "close": "173.50",
+    "volume": "50000000",
+    "previous_close": "170.50",
+    "change": "3.00",
+    "percent_change": "1.75",
+    "average_volume": "45000000",
+    "is_market_open": False
+}
+
+RAW_HISTORY_DATA = {
+    "meta": {
+        "symbol": "AAPL",
+        "interval": "1min",
+        "currency": "USD",
+        "exchange_timezone": "America/New_York",
+        "exchange": "NASDAQ",
+        "mic_code": "XNAS",
+        "type": "Common Stock"
+    },
+    "values": [
+        {
+            "datetime": "2023-11-01 10:00:00",
+            "open": "172.00",
+            "high": "172.50",
+            "low": "171.90",
+            "close": "172.10",
+            "volume": "1000"
+        },
+        {
+            "datetime": "2023-11-01 09:59:00",
+            "open": "171.00",
+            "high": "171.50",
+            "low": "170.90",
+            "close": "171.20",
+            "volume": "1500"
+        }
+    ]
+}
 
 # pytest tests/test_stocks.py::test_stock_watchlist
 def test_stock_watchlist(sync_client, session):
@@ -37,42 +89,86 @@ def test_stock_watchlist(sync_client, session):
 @pytest.mark.asyncio
 async def test_get_stock_quotes(async_client, mocker):
     """Test getting quote from a single stock"""
-    mock_data = [{
-        "symbol":"AAPL",
-        "name":"Apple Inc",
-        "close":148.0,
-        "change":-0.23,
-        "percent_change":-0.17,
-        "high":149.0,
-        "low":147.0,
-        "volume":60000000
-    }]
-    mock_get = mocker.patch("app.services.stocks_service.get_realtime_market_data")
-    mock_get.return_value = mock_data
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = RAW_QUOTE_DATA
+    mock_response.raise_for_status.return_value = None
+
+    mock_client_instance = MagicMock()
+    mock_client_instance.get = AsyncMock(return_value=mock_response)
+    mock_client_context = MagicMock()
+    mock_client_context.__aenter__ = AsyncMock(return_value=mock_client_instance)
+    mock_client_context.__aexit__ = AsyncMock(return_value=None)
+
+    mocker.patch(
+        "app.services.stocks_service.httpx.AsyncClient",
+        return_value=mock_client_context
+    )
 
     response = await async_client.get("/stocks/quotes?symbols=AAPL")
 
+    expected_data = [{
+        "symbol": "AAPL",
+        "name": "Apple Inc",
+        "close": 173.50,
+        "change": 3.00,
+        "percent_change": 1.75,
+        "high": 175.00,
+        "low": 169.00,
+        "volume": 50000000
+    }]
+
     assert response.status_code == 200
-    assert response.json() == mock_data
-    mock_get.assert_called_once()
+    assert response.json() == expected_data
 
 # pytest tests/test_stocks.py::test_get_stock_history
 @pytest.mark.asyncio
 async def test_get_stock_history(async_client, mocker):
     """Test getting history data from a stock"""
-    mock_data = [{
-        "symbol":"AAPL",
-        "history":[{
-            "time": datetime.now().isoformat(),
-            "price": 1.1
-            }]
-    }]
-    mock_get = mocker.patch("app.services.stocks_service.get_stock_history")
-    mock_get.return_value = mock_data
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = RAW_HISTORY_DATA
+    mock_response.raise_for_status.return_value = None
+
+    mock_client_instance = MagicMock()
+    mock_client_instance.get = AsyncMock(return_value=mock_response)
+    mock_client_context = MagicMock()
+    mock_client_context.__aenter__ = AsyncMock(return_value=mock_client_instance)
+    mock_client_context.__aexit__ = AsyncMock(return_value=None)
+
+    mocker.patch(
+        "app.services.stocks_service.httpx.AsyncClient",
+        return_value=mock_client_context
+    )
 
     response = await async_client.get("/stocks/history?symbols=a&interval=1min&count=1")
 
+    expected_data = [{
+        "symbol": "AAPL",
+        "history": [
+            {
+                # Oldest first (Reversed)
+                "time": "2023-11-01T13:59:00Z", 
+                "price": 171.20
+            },
+            {
+                # Newest last
+                "time": "2023-11-01T14:00:00Z",
+                "price": 172.10
+            }
+        ]
+    }]
+
     assert response.status_code == 200
-    assert response.json() == mock_data
-    mock_get.assert_called_once()
+    actual_data = response.json()
+    
+    assert len(actual_data) == 1
+    assert actual_data[0]["symbol"] == "AAPL"
+    assert len(actual_data[0]["history"]) == 2
+    
+    # Check Price parsing
+    assert actual_data[0]["history"][0]["price"] == 171.20
+    
+    # Check Date parsing 
+    assert "2023-11-01T13:59:00" in actual_data[0]["history"][0]["time"]
     

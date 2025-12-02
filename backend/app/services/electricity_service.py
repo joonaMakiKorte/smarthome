@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 from sqlmodel import Session, select, func, delete
 from typing import Literal, List
 
-url = "https://api.porssisahko.net/v2/latest-prices.json"
+URL = "https://api.porssisahko.net/v2/latest-prices.json"
 
 async def fetch_and_store_electricity_prices(session: Session):
     """
@@ -13,7 +13,7 @@ async def fetch_and_store_electricity_prices(session: Session):
     Handles deletion of electricity data older than 10 days.
     """
     async with httpx.AsyncClient(10.0) as client:
-        response = await client.get(url)
+        response = await client.get(URL)
         response.raise_for_status()
         data = response.json()
 

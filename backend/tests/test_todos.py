@@ -11,7 +11,7 @@ async def test_read_todos(async_client, mocker):
         {"id": "2", "content": "Test Task 2", "priority": 4},
     ]
     mock_get_tasks = mocker.patch(
-        "app.services.todoist_service.get_all_tasks",
+        "app.services.todoist_service.fetch_all_tasks",
     )
     mock_get_tasks.return_value = mock_data
 
@@ -42,7 +42,7 @@ def test_read_completed_todos(sync_client, session):
 @pytest.mark.asyncio
 async def test_complete_todo_success(async_client, session, mocker):
     """Test completing a todo successfully."""
-    mock_complete_task = mocker.patch("app.services.todoist_service.api.complete_task")
+    mock_complete_task = mocker.patch("app.services.todoist_service.API.complete_task")
     mock_complete_task.return_value = True
 
     task_id = "1"
@@ -71,7 +71,7 @@ async def test_reopen_todo_success(async_client, session, mocker):
     session.add(existing_task)
     session.commit()
 
-    mock_reopen_task = mocker.patch("app.services.todoist_service.api.uncomplete_task")
+    mock_reopen_task = mocker.patch("app.services.todoist_service.API.uncomplete_task")
     mock_reopen_task.return_value = True
 
     response = await async_client.post(f"/todos/{task_id}/reopen")

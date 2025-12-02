@@ -13,12 +13,12 @@ router = APIRouter()
 async def read_todos():
     """Fetch all active todos from Todoist."""
     async with handle_upstream_errors("Todoist"):
-        return await todoist_service.get_all_tasks()
+        return await todoist_service.fetch_all_tasks()
 
 @router.get("/todos/completed", response_model=List[CompletedTask])
 def read_completed_todos(session: Session = Depends(get_session)):
     """Fetch the last 10 completed todos from the local database."""
-    return todoist_service.get_completed_tasks(session)
+    return todoist_service.fetch_completed_tasks(session)
 
 @router.post("/todos/{task_id}/complete")
 async def complete_todo(task_id: str, task_content: str, priority: int, session: Session = Depends(get_session)):
