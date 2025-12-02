@@ -1,7 +1,6 @@
 import pytest
 from app.models import StopWatchlist
 from sqlmodel import select
-from unittest.mock import MagicMock, AsyncMock
 
 # Raw GraphQL Response from Digitransit
 RAW_GRAPHQL_DATA = {
@@ -58,7 +57,7 @@ def test_stop_watchlist(sync_client, session):
 
 # pytest tests/test_stops.py::test_stop_liveboard
 @pytest.mark.asyncio
-async def test_stop_liveboard(async_client, mocker, mock_httpx_client):
+async def test_stop_liveboard(async_client, mock_httpx_client):
     """Test fetching liveboard data for stops"""
     mock_client = mock_httpx_client(
         patch_target="app.services.stops_service.httpx.AsyncClient",

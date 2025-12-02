@@ -2,7 +2,6 @@ import pytest
 from sqlmodel import select
 from app.models import ElectricityPrice
 from datetime import datetime, timedelta, timezone
-from unittest.mock import MagicMock, AsyncMock
 
 RAW_PRICE_DATA = {
     "prices": [
@@ -25,22 +24,11 @@ RAW_EMPTY_PRICE_DATA = {
 
 # pytest tests/test_electricity.py::test_refreshing_electricity_prices
 @pytest.mark.asyncio
-async def test_refreshing_electricity_prices(async_client, mocker, session):
+async def test_refreshing_electricity_prices(async_client, mock_httpx_client, session):
     """Test refreshing electricity prices from external API and storing them in DB."""
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.json.return_value = RAW_PRICE_DATA
-    mock_response.raise_for_status.return_value = None
-
-    mock_client_instance = MagicMock()
-    mock_client_instance.get = AsyncMock(return_value=mock_response)
-    mock_client_context = MagicMock()
-    mock_client_context.__aenter__ = AsyncMock(return_value=mock_client_instance)
-    mock_client_context.__aexit__ = AsyncMock(return_value=None)
-
-    mocker.patch(
-        "app.services.electricity_service.httpx.AsyncClient",
-        return_value=mock_client_context
+    mock_client = mock_httpx_client(
+        patch_target="app.services.electricity_service.httpx.AsyncClient",
+        response_data=RAW_PRICE_DATA
     )
 
     response = await async_client.post("/electricity/refresh")
@@ -53,6 +41,7 @@ async def test_refreshing_electricity_prices(async_client, mocker, session):
     assert len(prices_in_db) == 2
     assert prices_in_db[0].price == 50.0
     assert prices_in_db[1].price == 45.0
+    mock_client.get.assert_called_once()
 
 # pytest tests/test_electricity.py::test_read_electricity_prices_15min
 def test_read_electricity_prices_15min(sync_client, session):
@@ -115,7 +104,7 @@ def test_calc_10_day_avg(sync_client, session):
 
 # pytest tests/test_electricity.py::test_delete_old_entry
 @pytest.mark.asyncio
-async def test_delete_old_entry(async_client, session, mocker):
+async def test_delete_old_entry(async_client, session, mock_httpx_client):
     """Test auto deletion of entries older than 10 days"""
     time_now = datetime.now(tz=timezone.utc)
 
@@ -129,20 +118,9 @@ async def test_delete_old_entry(async_client, session, mocker):
     session.commit()
 
     # Patch empty data to only hit the deletion functionality
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.json.return_value = RAW_EMPTY_PRICE_DATA
-    mock_response.raise_for_status.return_value = None
-
-    mock_client_instance = MagicMock()
-    mock_client_instance.get = AsyncMock(return_value=mock_response)
-    mock_client_context = MagicMock()
-    mock_client_context.__aenter__ = AsyncMock(return_value=mock_client_instance)
-    mock_client_context.__aexit__ = AsyncMock(return_value=None)
-
-    mocker.patch(
-        "app.services.electricity_service.httpx.AsyncClient",
-        return_value=mock_client_context
+    mock_client = mock_httpx_client(
+        patch_target="app.services.electricity_service.httpx.AsyncClient",
+        response_data=RAW_EMPTY_PRICE_DATA
     )
 
     response = await async_client.post("/electricity/refresh")
@@ -157,3 +135,5 @@ async def test_delete_old_entry(async_client, session, mocker):
     prices_in_db = session.exec(select(ElectricityPrice)).all()
     assert len(prices_in_db) == 1
     assert prices_in_db[0].price == price1.price
+
+    mock_client.get.assert_called_once()

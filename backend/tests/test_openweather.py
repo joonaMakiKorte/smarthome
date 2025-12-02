@@ -1,5 +1,4 @@
 import pytest
-from unittest.mock import MagicMock, AsyncMock
 
 # Define sample RAW data
 RAW_HOURLY_DATA = {
@@ -24,24 +23,11 @@ RAW_CURRENT_DATA = {
 
 # pytest tests/test_openweather.py::test_get_hourly_weather
 @pytest.mark.asyncio
-async def test_get_hourly_weather(async_client, mocker):
+async def test_get_hourly_weather(async_client, mock_httpx_client):
     """Test fetching hourly weather."""
-    # Create mock response
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.json.return_value = RAW_HOURLY_DATA
-    mock_response.raise_for_status.return_value = None
-
-    # Define mock client context
-    mock_client_instance = MagicMock()
-    mock_client_instance.get = AsyncMock(return_value=mock_response)
-    mock_client_context = MagicMock()
-    mock_client_context.__aenter__ = AsyncMock(return_value=mock_client_instance)
-    mock_client_context.__aexit__ = AsyncMock(return_value=None)
-
-    mocker.patch(
-        "app.services.openweather_service.httpx.AsyncClient",
-        return_value=mock_client_context
+    mock_client = mock_httpx_client(
+        patch_target="app.services.openweather_service.httpx.AsyncClient",
+        response_data=RAW_HOURLY_DATA
     )
 
     response = await async_client.get("/weather/hourly")
@@ -58,25 +44,15 @@ async def test_get_hourly_weather(async_client, mocker):
 
     assert response.status_code == 200
     assert response.json() == expected_parsed_data
+    mock_client.get.assert_called_once()
 
 # pytest tests/test_openweather.py::test_get_current_weather
 @pytest.mark.asyncio
-async def test_get_current_weather(async_client, mocker):
+async def test_get_current_weather(async_client, mock_httpx_client):
     """Test fetching current weather data from OpenWeather."""
-    mock_response = MagicMock()
-    mock_response.status_code = 200
-    mock_response.json.return_value = RAW_CURRENT_DATA
-    mock_response.raise_for_status.return_value = None
-
-    mock_client_instance = MagicMock()
-    mock_client_instance.get = AsyncMock(return_value=mock_response)
-    mock_client_context = MagicMock()
-    mock_client_context.__aenter__ = AsyncMock(return_value=mock_client_instance)
-    mock_client_context.__aexit__ = AsyncMock(return_value=None)
-
-    mocker.patch(
-        "app.services.openweather_service.httpx.AsyncClient",
-        return_value=mock_client_context
+    mock_client = mock_httpx_client(
+        patch_target="app.services.openweather_service.httpx.AsyncClient",
+        response_data=RAW_CURRENT_DATA
     )
 
     response = await async_client.get("/weather/current")
@@ -93,3 +69,4 @@ async def test_get_current_weather(async_client, mocker):
 
     assert response.status_code == 200
     assert response.json() == expected_parsed_data
+    mock_client.get.assert_called_once()
