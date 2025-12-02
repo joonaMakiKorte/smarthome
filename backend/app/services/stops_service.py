@@ -66,19 +66,19 @@ async def _fetch_single_stop_data(client: httpx.AsyncClient, gtfs_id) -> StopTim
     arrivals = stop_data.get("stoptimesWithoutPatterns", [])
     return StopTimetable(
         gtfs_id = gtfs_id, 
-        name = stop_data.get("name"),
+        name = stop_data.get("name", "Null"),
         timetable = [StopTimeEntry(
             arrival_time = _seconds_since_midnight_to_datetime(
-                seconds_arrival=arrival.get("realtimeArrival") if arrival.get("realtime") is True
-                  else arrival.get("scheduledArrival"),
-                service_day=arrival.get("serviceDay")
+                seconds_arrival=arrival.get("realtimeArrival", 0) if arrival.get("realtime") is True
+                  else arrival.get("scheduledArrival", 0),
+                service_day=arrival.get("serviceDay", 0)
             ),
             headsign = arrival.get("headsign"),
-            route = arrival.get("trip", {}).get("route", {}).get("shortName")
+            route = arrival.get("trip", {}).get("route", {}).get("shortName", "Null")
         ) for arrival in arrivals]
     )
 
-async def _seconds_since_midnight_to_datetime(seconds_arrival: int, service_day: int) -> datetime:
+def _seconds_since_midnight_to_datetime(seconds_arrival: int, service_day: int) -> datetime:
     """Convert seconds since midnight to utc datetime."""
     arrival_timestamp = service_day + seconds_arrival
     return datetime.fromtimestamp(arrival_timestamp, tz=timezone.utc)

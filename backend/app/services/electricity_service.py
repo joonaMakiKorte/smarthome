@@ -12,7 +12,7 @@ async def fetch_and_store_electricity_prices(session: Session):
     Fetches electricity prices from API and saves to DB (Upsert).
     Handles deletion of electricity data older than 10 days.
     """
-    async with httpx.AsyncClient() as client:
+    async with httpx.AsyncClient(10.0) as client:
         response = await client.get(url)
         response.raise_for_status()
         data = response.json()
