@@ -1,7 +1,6 @@
 import pytest
 from app.models import StockSymbol
 from sqlmodel import select
-from datetime import datetime
 from unittest.mock import MagicMock, AsyncMock
 
 # Define the raw data for tests

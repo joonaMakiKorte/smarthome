@@ -1,8 +1,30 @@
 import pytest
 from app.models import StopWatchlist
 from sqlmodel import select
-from datetime import datetime
-from app.services.stops_service import _fetch_single_stop_data
+from unittest.mock import MagicMock, AsyncMock
+
+# Raw GraphQL Response from Digitransit
+RAW_GRAPHQL_DATA = {
+    "data": {
+        "stop": {
+            "name": "Hakametsä",
+            "stoptimesWithoutPatterns": [
+                {
+                    "realtime": True,
+                    "realtimeArrival": 43200,    # 12:00:00 PM (Seconds since midnight)
+                    "scheduledArrival": 43200,
+                    "serviceDay": 1704067200,    # 2024-01-01 00:00:00 UTC
+                    "headsign": "Sorin Aukio",
+                    "trip": {
+                        "route": {
+                            "shortName": "3"
+                        }
+                    }
+                }
+            ]
+        }
+    }
+}
 
 # pytest tests/test_stops.py::test_stop_watchlist
 def test_stop_watchlist(sync_client, session):
@@ -38,21 +60,38 @@ def test_stop_watchlist(sync_client, session):
 @pytest.mark.asyncio
 async def test_stop_liveboard(async_client, mocker):
     """Test fetching liveboard data for stops"""
-    mock_data = [{
-        "gtfs_id" : "tampere:0001",
-        "name" : "Hakametsä",
-        "timetable" : [{
-            "arrival_time" : datetime.now().isoformat(),
-            "headsign" : "Sorin Aukio",
-            "route" : "3"
-        }
-        ]
-    }]
-    mock_get = mocker.patch("app.services.stops_service.fetch_stop_data")
-    mock_get.return_value = mock_data
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = RAW_GRAPHQL_DATA
+    mock_response.raise_for_status.return_value = None
+
+    mock_client_instance = MagicMock()
+    mock_client_instance.post = AsyncMock(return_value=mock_response)
+    mock_client_instance.get = AsyncMock(return_value=mock_response)
+    mock_client_context = MagicMock()
+    mock_client_context.__aenter__ = AsyncMock(return_value=mock_client_instance)
+    mock_client_context.__aexit__ = AsyncMock(return_value=None)
+
+    mocker.patch(
+        "app.services.stops_service.httpx.AsyncClient",
+        return_value=mock_client_context
+    )
 
     response = await async_client.get("/stops/live-board?gtfs_ids=tampere:0001")
 
+    # 1704067200 (Jan 1) + 43200 (12 hours) = Jan 1 at 12:00 UTC
+    expected_timestamp = "2024-01-01T12:00:00Z" 
+
+    # Expected Parsed Data
+    expected_data = [{
+        "gtfs_id": "tampere:0001",
+        "name": "Hakametsä",
+        "timetable": [{
+            "arrival_time": expected_timestamp,
+            "headsign": "Sorin Aukio",
+            "route": "3"
+        }]
+    }]
+
     assert response.status_code == 200
-    assert response.json() == mock_data
-    mock_get.assert_called_once()
+    assert response.json() == expected_data
