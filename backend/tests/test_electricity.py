@@ -3,26 +3,33 @@ from sqlmodel import select
 from app.models import ElectricityPrice
 from datetime import datetime, timedelta, timezone
 
+RAW_PRICE_DATA = {
+    "prices": [
+        {
+            "startDate": "2025-11-26T00:00:00Z",
+            "endDate": "2024-11-26T01:00:00Z",
+            "price": 50.0
+        },
+        {
+            "startDate": "2025-11-26T01:00:00Z",
+            "endDate": "2025-11-26T02:00:00Z",
+            "price": 45.0
+        }
+    ]
+}
+
+RAW_EMPTY_PRICE_DATA = {
+    "prices": []
+}
+
 # pytest tests/test_electricity.py::test_refreshing_electricity_prices
 @pytest.mark.asyncio
-async def test_refreshing_electricity_prices(async_client, mocker, session):
+async def test_refreshing_electricity_prices(async_client, mock_httpx_client, session):
     """Test refreshing electricity prices from external API and storing them in DB."""
-    mock_data = {
-        "prices": [
-            {
-                "startDate": "2025-11-26T00:00:00Z",
-                "endDate": "2024-11-26T01:00:00Z",
-                "price": 50.0
-            },
-            {
-                "startDate": "2025-11-26T01:00:00Z",
-                "endDate": "2025-11-26T02:00:00Z",
-                "price": 45.0
-            }
-        ]
-    }
-    mock_get = mocker.patch("app.services.electricity_service.httpx.AsyncClient.get")
-    mock_get.return_value.json = lambda: mock_data
+    mock_client = mock_httpx_client(
+        patch_target="app.services.electricity_service.httpx.AsyncClient",
+        response_data=RAW_PRICE_DATA
+    )
 
     response = await async_client.post("/electricity/refresh")
 
@@ -34,6 +41,7 @@ async def test_refreshing_electricity_prices(async_client, mocker, session):
     assert len(prices_in_db) == 2
     assert prices_in_db[0].price == 50.0
     assert prices_in_db[1].price == 45.0
+    mock_client.get.assert_called_once()
 
 # pytest tests/test_electricity.py::test_read_electricity_prices_15min
 def test_read_electricity_prices_15min(sync_client, session):
@@ -96,7 +104,7 @@ def test_calc_10_day_avg(sync_client, session):
 
 # pytest tests/test_electricity.py::test_delete_old_entry
 @pytest.mark.asyncio
-async def test_delete_old_entry(async_client, session, mocker):
+async def test_delete_old_entry(async_client, session, mock_httpx_client):
     """Test auto deletion of entries older than 10 days"""
     time_now = datetime.now(tz=timezone.utc)
 
@@ -110,8 +118,10 @@ async def test_delete_old_entry(async_client, session, mocker):
     session.commit()
 
     # Patch empty data to only hit the deletion functionality
-    mock_get = mocker.patch("app.services.electricity_service.httpx.AsyncClient.get")
-    mock_get.return_value.json = lambda: {"prices": []}
+    mock_client = mock_httpx_client(
+        patch_target="app.services.electricity_service.httpx.AsyncClient",
+        response_data=RAW_EMPTY_PRICE_DATA
+    )
 
     response = await async_client.post("/electricity/refresh")
 
@@ -125,3 +135,5 @@ async def test_delete_old_entry(async_client, session, mocker):
     prices_in_db = session.exec(select(ElectricityPrice)).all()
     assert len(prices_in_db) == 1
     assert prices_in_db[0].price == price1.price
+
+    mock_client.get.assert_called_once()

@@ -11,7 +11,7 @@ load_dotenv()
 
 API_KEY = os.getenv("TWELVEDATA_API_KEY")
 
-async def get_realtime_market_data(symbols: str) -> List[StockQuoteData]:
+async def fetch_realtime_market_data(symbols: str) -> List[StockQuoteData]:
     """Fetch real-time market data for selected symbols."""
     # Construct /quote endpoint url for symbols
     url = f"https://api.twelvedata.com/quote?symbol={symbols}&apikey={API_KEY}"
@@ -56,7 +56,7 @@ async def get_realtime_market_data(symbols: str) -> List[StockQuoteData]:
             ))
     return results
 
-async def get_stock_history(symbols: str, interval: str, count: int) -> List[StockHistoryData]:
+async def fetch_stock_history(symbols: str, interval: str, count: int) -> List[StockHistoryData]:
     """Fetch sparkline for given symbols"""
     # Construct /time_series endpoint url with given symbols and interval
     url = f"https://api.twelvedata.com/time_series?symbol={symbols}&interval={interval}&outputsize={count}&apikey={API_KEY}"

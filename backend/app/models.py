@@ -23,4 +23,10 @@ class StockSymbol(SQLModel, table=True):
     """Database model for a stock in watchlist."""
     symbol: str = Field(primary_key=True, description="Symbol ticker of the instrument")
     name: str | None = Field(default=None, description="Name of the stock")
-    
+
+class StopWatchlist(SQLModel, table=True):
+    """DB model for public transportation stop in watchlist."""
+    gtfs_id: str = Field(primary_key=True, description="The GTFS ID (e.g., tampere:0001")
+    custom_name: str = Field(description="A custom name for the stop")
+    original_name: str | None = Field(default=None, description="Original stop name from API") 
+       
