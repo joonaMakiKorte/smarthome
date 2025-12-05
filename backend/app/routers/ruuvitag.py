@@ -1,6 +1,6 @@
 import json
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from backend.app.services import ruuvitag_service
+from app.services import ruuvitag_service
 
 router = APIRouter()
 
@@ -10,12 +10,12 @@ async def websocket_endpoint(websocket: WebSocket):
     WebSocket endpoint for real-time sensor data.
     """
     await websocket.accept()
-    service = ruuvitag_service.get_service()
+    service = ruuvitag_service.get_sensor_service()
     try:
         # Subscribe the websocket to the async generator
-        async for data in service.stream_data(interval_seconds=0.2):
-            await websocket.send_text(json.dumps(data))
+        async for data in service.stream_data(interval=0.2):
+            await websocket.send_text(data.model_dump_json())
     except WebSocketDisconnect:
-        print("Dashboard disconnected")
+        print("Ruuvi Dashboard disconnected")
     except Exception as e:
         print(f"Error: {e}")

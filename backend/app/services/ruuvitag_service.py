@@ -20,7 +20,8 @@ class MockRuuviSensor:
 
     def _random_walk(self, current_val, step_size, min_val, max_val, decimal_places=2):
         """Apply a small step to current value to mimic a stochastic process"""
-        if random.random() > 0.95: return # Randomly skip change (approx one in 20th)
+        if random.random() > 0.95:
+            return current_val # Randomly skip change (approx one in 20th)
 
         # Up of down
         step = random.uniform(-step_size, step_size)
@@ -58,7 +59,7 @@ class MockRuuviSensor:
                 pressure=self._pres,
                 battery=self._batt,
                 rssi=rssi_val,
-                time=datetime.now(timezone.utc)
+                timestamp=datetime.now(timezone.utc)
             )
 
             yield packet
@@ -69,9 +70,21 @@ class MockRuuviSensor:
     def stop(self):
         self.running = False
 
+# Global singleton instance of the sensor
+_sensor_instance = None
 
-def get_service():
-    """Depending on app environment, return instance of mock or real ruuvitag"""
+def get_sensor_service():
+    """Return a singleton instance"""
+    global _sensor_instance
+
+    load_dotenv()
     production = os.getenv("APP_ENV", "development") == "production"
-    if not production:
-        return MockRuuviSensor()
+    
+    if production:
+        # Placeholder for real service
+        pass 
+
+    if _sensor_instance is None:
+        _sensor_instance = MockRuuviSensor()
+        
+    return _sensor_instance

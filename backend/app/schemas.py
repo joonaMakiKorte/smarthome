@@ -80,5 +80,5 @@ class SensorData(BaseModel):
     pressure: float = Field(..., ge=0, description="Recorder pressure in hPa")
     battery: int = Field(..., ge=0, description="Battery voltage in mV")
     rssi: int = Field(..., le=0, description="Received signal strength indicator")
-    time: datetime = Field(..., description="Timestamp of the recorded data")
+    timestamp: datetime = Field(..., description="Timestamp of the recorded data")
     
