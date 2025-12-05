@@ -1,7 +1,9 @@
+import os
 import random
 import asyncio
 from datetime import datetime, timezone
 from app.schemas import SensorData
+from dotenv import load_dotenv
 
 class MockRuuviSensor:
     def __init__(self, mac_address: str = "AA:BB:CC:DD:EE:FF"):
@@ -67,5 +69,9 @@ class MockRuuviSensor:
     def stop(self):
         self.running = False
 
-# Singleton
-mock_sensor_service = MockRuuviSensor()
+
+def get_service():
+    """Depending on app environment, return instance of mock or real ruuvitag"""
+    production = os.getenv("APP_ENV", "development") == "production"
+    if not production:
+        return MockRuuviSensor()
