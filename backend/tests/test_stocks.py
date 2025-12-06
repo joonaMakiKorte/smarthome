@@ -37,20 +37,20 @@ RAW_HISTORY_DATA = {
     },
     "values": [
         {
-            "datetime": "2023-11-01 10:00:00",
-            "open": "172.00",
-            "high": "172.50",
-            "low": "171.90",
-            "close": "172.10",
-            "volume": "1000"
-        },
-        {
             "datetime": "2023-11-01 09:59:00",
             "open": "171.00",
             "high": "171.50",
             "low": "170.90",
             "close": "171.20",
             "volume": "1500"
+        },
+        {
+            "datetime": "2023-11-01 10:00:00",
+            "open": "172.00",
+            "high": "172.50",
+            "low": "171.90",
+            "close": "172.10",
+            "volume": "1000"
         }
     ]
 }
@@ -119,26 +119,32 @@ async def test_get_stock_quotes(async_client, mock_httpx_client, mocker):
 
 # pytest tests/test_stocks.py::test_get_stock_history
 @pytest.mark.asyncio
-async def test_get_stock_history(async_client, mock_httpx_client):
+async def test_get_stock_history(async_client, mock_httpx_client, mocker):
     """Test getting history data from a stock"""
     mock_client = mock_httpx_client(
         patch_target="app.services.stocks_service.httpx.AsyncClient",
         response_data=RAW_HISTORY_DATA
     )
+    mocker.patch("app.services.stocks_service.token_manager.has_tokens", return_value=True)
+    mocker.patch("app.services.stocks_service.rate_limiter.can_request", return_value=True)
 
-    response = await async_client.get("/stocks/history?symbols=a&interval=1min&count=1")
+    response = await async_client.get("/stocks/history?symbols=AAPL&interval=1min")
 
     expected_data = [{
         "symbol": "AAPL",
         "history": [
             {
                 # Oldest first (Reversed)
-                "time": "2023-11-01T13:59:00Z", 
+                "symbol": "AAPL",
+                "interval": "1min",
+                "timestamp": "2023-11-01T13:59:00Z", 
                 "price": 171.20
             },
             {
                 # Newest last
-                "time": "2023-11-01T14:00:00Z",
+                "symbol": "AAPL",
+                "interval": "1min",
+                "timestamp": "2023-11-01T14:00:00Z",
                 "price": 172.10
             }
         ]

@@ -1,4 +1,4 @@
-from sqlmodel import SQLModel, Field, Relationship, Column, BigInteger, UniqueConstraint
+from sqlmodel import SQLModel, Field, Relationship, Column, BigInteger
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -52,13 +52,9 @@ class StockQuote(SQLModel, table=True):
 
 class StockPriceEntry(SQLModel, table=True):
     """Child table representing individual data points in stock timeseries data."""
-    __table_args__ = (
-        UniqueConstraint("symbol", "timestamp", "interval", name="unique_stock_candle"),
-    )
-    id: Optional[int] = Field(default=None, primary_key=True)
-    symbol: str = Field(foreign_key="stock.symbol", index=True)
-    interval: str = Field(index=True, description="Timeframe of the candle")
-    timestamp: datetime = Field(index=True, description="Timestamp of the recorded price")
+    symbol: str = Field(foreign_key="stock.symbol", primary_key=True)
+    interval: str = Field(primary_key=True, description="Timeframe: 1min, 5min")
+    timestamp: datetime = Field(primary_key=True, description="UTC Timestamp")
     price: float = Field(..., ge=0, description="Price in USD")
 
     stock: Optional[Stock] = Relationship(back_populates="history_entries")

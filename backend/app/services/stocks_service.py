@@ -256,16 +256,15 @@ async def get_smart_stock_history(symbols: str, interval: str, session: Session)
     if symbols_to_fetch:
         if token_manager.has_tokens() and rate_limiter.can_request():
             api_results = await _fetch_stock_history(symbols_to_fetch, start_dt, end_dt, interval)
-
-            for stock_data in api_results:
-                # Update the return map
-                history_map[stock_data.symbol] = stock_data.history
-                
+            for stock_data in api_results:               
                 # Persist to DB 
                 for entry in stock_data.history:
                     entry.symbol = stock_data.symbol # Ensure FK is set
                     entry.interval = interval
                     session.merge(entry) # Upsert
+
+                # Update the return map
+                history_map[stock_data.symbol] = stock_data.history
                 
             session.commit()
 

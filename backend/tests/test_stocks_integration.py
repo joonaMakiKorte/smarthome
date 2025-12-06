@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime
 
 # pytest tests/test_stocks_integration.py::test_real_stock_quotes
 @pytest.mark.asyncio
@@ -28,13 +29,15 @@ async def test_real_stock_quotes(async_client, mocker):
 
 # pytest tests/test_stocks_integration.py::test_real_stock_history
 @pytest.mark.asyncio
-async def test_real_stock_history(async_client):
+async def test_real_stock_history(async_client, mocker):
     """Verify timezone and sparkline data conversion."""
+    mocker.patch("app.services.stocks_service.token_manager.has_tokens", return_value=True)
+    mocker.patch("app.services.stocks_service.rate_limiter.can_request", return_value=True)
+
     symbol = "NVDA"
-    count = 5
     interval = "1min"
     
-    response = await async_client.get(f"/stocks/history?symbols={symbol}&interval={interval}&count={count}")
+    response = await async_client.get(f"/stocks/history?symbols={symbol}&interval={interval}")
 
     assert response.status_code == 200, f"API failed with: {response.text}"
     data = response.json()
@@ -43,7 +46,6 @@ async def test_real_stock_history(async_client):
     stock_obj = data[0]
     
     assert stock_obj["symbol"] == "NVDA"
-    assert len(stock_obj["history"]) == count 
 
     latest_entry = stock_obj["history"][0] 
     
@@ -51,7 +53,6 @@ async def test_real_stock_history(async_client):
     assert latest_entry["price"] > 0
     
     # Ensure time is a valid ISO string
-    time_str = latest_entry["time"].replace("Z", "+00:00") # Satisfy python < 3.11
-    from datetime import datetime
+    time_str = latest_entry["timestamp"].replace("Z", "+00:00") # Satisfy python < 3.11
     dt = datetime.fromisoformat(time_str)
     assert dt.year >= 2023 # Sanity check 

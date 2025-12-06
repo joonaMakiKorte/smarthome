@@ -61,7 +61,7 @@ async def get_historical_data(
 ):
     """Get historical data for stocks."""
     async with handle_upstream_errors("Twelve Data"):
-        return await stocks_service.fetch_stock_history(symbols, interval, session)
+        return await stocks_service.get_smart_stock_history(symbols, interval, session)
     
 @router.post("/stocks/history/prune")
 def prune_stock_history(session: Session = Depends(get_session)):
