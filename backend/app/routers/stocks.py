@@ -48,8 +48,8 @@ async def get_stock_quotes(
     symbols: str = Query(..., description="Comma separated symbols, e.g. 'AAPL' or 'AAPL,MSFT'"),
     session: Session = Depends(get_session)):
     """Get real-time stock quotes from Twelve Data"""
-    async with handle_upstream_errors("Twelve Data"):
-        return await stocks_service.get_smart_stock_quote(symbols, session)
+    #async with handle_upstream_errors("Twelve Data"):
+    return await stocks_service.get_smart_stock_quote(symbols, session)
     
 @router.get("/stocks/history", response_model=List[StockHistoryData])
 async def get_historical_data(

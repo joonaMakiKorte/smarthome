@@ -75,7 +75,9 @@ token_manager = TokenManager()
 rate_limiter = RateLimiter()
 
 # Cache config
-memory_cache = TTLCache(maxsize=100, ttl=60)
+IS_TESTING = os.getenv("TESTING", "False") == "True"
+CACHE_SIZE = 0 if IS_TESTING else 100
+memory_cache = TTLCache(maxsize=CACHE_SIZE, ttl=60)
 
 def _get_last_market_close() -> datetime:
     """Calculate the timestamp of the most recent market close."""
@@ -136,8 +138,8 @@ async def get_smart_stock_quote(symbols: str, session: Session) -> List[StockQuo
         # Check ratelimits
         if token_manager.has_tokens() and rate_limiter.can_request():
             api_data = await _fetch_realtime_market_data(symbols_to_fetch)
-
-            rate_limiter.record_request()
+    
+            rate_limiter.record_request(len(symbols_to_fetch))
             token_manager.consume(len(symbols_to_fetch))
 
             # Update to DB and Cache
@@ -153,7 +155,7 @@ async def get_smart_stock_quote(symbols: str, session: Session) -> List[StockQuo
                     results[sym] = db_map[sym]
 
     # Return quotes filtering out failures
-    return [results[sym] for sym in symbols if sym in results]
+    return [results[sym] for sym in symbol_list if sym in results]
         
 async def _fetch_realtime_market_data(symbols: List[str]) -> List[StockQuote]:
     """Fetch real-time market data for selected symbols."""
@@ -185,7 +187,7 @@ async def _fetch_realtime_market_data(symbols: List[str]) -> List[StockQuote]:
             high = round(float(data["high"]), 2),
             low = round(float(data["low"]), 2),
             volume = int(data["volume"]),
-            timestamp=datetime.now(TZ_NY)
+            timestamp=datetime.fromtimestamp(data["timestamp"],tz=TZ_NY)
         ))
     # Twelve Data returns a dict keyed by symbol for multiple symbols requested
     else:
@@ -199,7 +201,7 @@ async def _fetch_realtime_market_data(symbols: List[str]) -> List[StockQuote]:
                 high = round(float(details["high"]), 2),
                 low = round(float(details["low"]), 2),
                 volume = int(details["volume"]),
-                timestamp=datetime.now(TZ_NY)
+                timestamp=datetime.fromtimestamp(details["timestamp"],tz=TZ_NY)
             ))
     return results
 

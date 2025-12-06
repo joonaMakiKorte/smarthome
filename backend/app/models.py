@@ -1,4 +1,4 @@
-from sqlmodel import SQLModel, Field, Relationship
+from sqlmodel import SQLModel, Field, Relationship, Column, BigInteger
 from datetime import datetime, timezone
 from typing import List, Optional
 
@@ -45,7 +45,7 @@ class StockQuote(SQLModel, table=True):
     percent_change: float = Field(description="Daily change in percentages")
     high: float = Field(ge=0, description="Daily high price in USD")
     low: float = Field(ge=0, description="Daily low price in USD")
-    volume: int = Field(ge=0, description="Volume/action in stock") 
+    volume: int = Field(sa_column=Column(BigInteger),ge=0, description="Volume/action in stock") 
     timestamp: datetime = Field(description="Timestamp of the quote")
     
     stock: Stock = Relationship(back_populates="quote")
