@@ -1,5 +1,6 @@
-from sqlmodel import SQLModel, Field
+from sqlmodel import SQLModel, Field, Relationship, Column, BigInteger
 from datetime import datetime, timezone
+from typing import List, Optional
 
 class CompletedTask(SQLModel, table=True):
     """Database model for a completed todo task."""
@@ -13,16 +14,51 @@ class CompletedTask(SQLModel, table=True):
         default_factory=lambda: datetime.now(tz=timezone.utc),
         description="UTC Timestamp when the task was completed")
     
+    
 class ElectricityPrice(SQLModel, table=True):
     """Database model for electricity price data."""
     start_time: datetime = Field(primary_key=True, description="Start time of the price interval in UTC")
     end_time: datetime = Field(description="End time of the price interval in UTC")
     price: float = Field(description="Electricity price in CT/kWh")
 
-class StockSymbol(SQLModel, table=True):
+
+class Stock(SQLModel, table=True):
     """Database model for a stock in watchlist."""
-    symbol: str = Field(primary_key=True, description="Symbol ticker of the instrument")
+    symbol: str = Field(primary_key=True, description="Symbol ticker of the instrument (e.g., AAPL)")
     name: str | None = Field(default=None, description="Name of the stock")
+
+    quote: Optional["StockQuote"] = Relationship(
+        back_populates="stock",
+        sa_relationship_kwargs={"cascade": "all, delete-orphan", "uselist": False}
+    )
+    history_entries: List["StockPriceEntry"] = Relationship(
+        back_populates="stock", 
+        sa_relationship_kwargs={"cascade": "all, delete-orphan"} # If stock is deleted, delete history
+    )
+
+class StockQuote(SQLModel, table=True):
+    """Child table for detailed stock quote data."""
+    symbol: str = Field(primary_key=True,foreign_key="stock.symbol",description="Symbol ticker of the instrument")
+    name: str = Field(description="Name of the stock")
+    close: float = Field(ge=0, description="The current price in USD")
+    change: float = Field(description="Daily change in USD")
+    percent_change: float = Field(description="Daily change in percentages")
+    high: float = Field(ge=0, description="Daily high price in USD")
+    low: float = Field(ge=0, description="Daily low price in USD")
+    volume: int = Field(sa_column=Column(BigInteger),ge=0, description="Volume/action in stock") 
+    timestamp: datetime = Field(description="Timestamp of the quote")
+    
+    stock: Stock = Relationship(back_populates="quote")
+
+class StockPriceEntry(SQLModel, table=True):
+    """Child table representing individual data points in stock timeseries data."""
+    symbol: str = Field(foreign_key="stock.symbol", primary_key=True)
+    interval: str = Field(primary_key=True, description="Timeframe: 1min, 5min")
+    timestamp: datetime = Field(primary_key=True, description="UTC Timestamp")
+    price: float = Field(..., ge=0, description="Price in USD")
+
+    stock: Optional[Stock] = Relationship(back_populates="history_entries")
+
 
 class StopWatchlist(SQLModel, table=True):
     """DB model for public transportation stop in watchlist."""

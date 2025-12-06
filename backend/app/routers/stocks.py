@@ -1,22 +1,24 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlmodel import Session, select
+from sqlmodel import Session, select, delete
 from app.database import get_session
 from app.services import stocks_service
 from app.utils import handle_upstream_errors
 from typing import List
-from app.schemas import StockQuoteData, StockHistoryData
-from app.models import StockSymbol
+from app.schemas import StockHistoryData
+from app.models import Stock, StockQuote, StockPriceEntry
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 router = APIRouter()
 
-@router.get("/stocks/watchlist", response_model=List[StockSymbol])
+@router.get("/stocks/watchlist", response_model=List[Stock])
 def get_watchlist(session: Session = Depends(get_session)):
     """Get current stock watchlist from db"""
-    symbols = session.exec(select(StockSymbol)).all()
+    symbols = session.exec(select(Stock)).all()
     return symbols
 
 @router.post("/stocks/watchlist")
-def add_stock(stock: StockSymbol, session: Session = Depends(get_session)):
+def add_stock(stock: Stock, session: Session = Depends(get_session)):
     """Add a new stock to watchlist"""
     try:
         session.add(stock)
@@ -32,7 +34,7 @@ def add_stock(stock: StockSymbol, session: Session = Depends(get_session)):
 @router.delete("/stocks/watchlist/{symbol}")
 def remove_stock(symbol: str, session: Session = Depends(get_session)):
     """Delete a stock from watchlist"""
-    stock = session.get(StockSymbol, symbol)
+    stock = session.get(Stock, symbol)
     if not stock:
         print("Error deleting stock from watchlist")
         raise HTTPException(
@@ -43,19 +45,32 @@ def remove_stock(symbol: str, session: Session = Depends(get_session)):
     session.commit()
     return {"status" : "Stock deleted"}
 
-@router.get("/stocks/quotes", response_model=List[StockQuoteData])
-async def get_stock_quotes(symbols: str = Query(..., description="Comma separated symbols, e.g. 'AAPL' or 'AAPL,MSFT'")):
+@router.get("/stocks/quotes", response_model=List[StockQuote])
+async def get_stock_quotes(
+    symbols: str = Query(..., description="Comma separated symbols, e.g. 'AAPL' or 'AAPL,MSFT'"),
+    session: Session = Depends(get_session)):
     """Get real-time stock quotes from Twelve Data"""
     async with handle_upstream_errors("Twelve Data"):
-        return await stocks_service.fetch_realtime_market_data(symbols)
+        return await stocks_service.get_smart_stock_quote(symbols, session)
     
 @router.get("/stocks/history", response_model=List[StockHistoryData])
 async def get_historical_data(
     symbols: str = Query(..., description="Comma separated symbols, e.g. 'AAPL' or 'AAPL,MSFT'"),
-    interval: str = Query("1day", description="Timeframe: 1min, 5min, 1h, 1day"),
-    count: int = Query(30, description="Number of data points to return")
+    interval: str = Query("5min", description="Timeframe: 1min, 5min, 1h"),
+    session: Session = Depends(get_session)
 ):
     """Get historical data for stocks."""
     async with handle_upstream_errors("Twelve Data"):
-        return await stocks_service.fetch_stock_history(symbols,interval,count)
+        return await stocks_service.get_smart_stock_history(symbols, interval, session)
     
+@router.delete("/stocks/history/prune")
+def prune_stock_history(session: Session = Depends(get_session)):
+    """Prune history older than 48 hours."""
+    cutoff = datetime.now(ZoneInfo("America/New_York")) - timedelta(days=2)
+    statement = delete(StockPriceEntry).where(StockPriceEntry.timestamp < cutoff)
+    
+    # Run the deletion
+    result = session.exec(statement)
+    session.commit()
+    print(f"Pruned {result.rowcount} old history entries.")
+    return {"status" : "Stock history pruned."}

@@ -4,15 +4,25 @@ from typing import List
 from dotenv import load_dotenv
 from app.schemas import HourlyWeather, CurrentWeather
 from datetime import datetime, timezone
+from cachetools import TTLCache
+from asyncache import cached
 
 load_dotenv()
 
+# API config
 API_KEY = os.getenv("OPENWEATHER_API_KEY")
 LAT = os.getenv("LAT")
 LON = os.getenv("LON")
 # URL for one call API
 URL = f"https://api.openweathermap.org/data/3.0/onecall?lat={LAT}&lon={LON}&units=metric&appid={API_KEY}"
 
+# Cache config
+IS_TESTING = os.getenv("TESTING", "False") == "True"
+CACHE_SIZE = 0 if IS_TESTING else 1
+hourly_cache = TTLCache(maxsize=CACHE_SIZE, ttl=3600)
+current_cache = TTLCache(maxsize=CACHE_SIZE, ttl=600)
+
+@cached(hourly_cache)
 async def fetch_hourly_weather_data() -> List[HourlyWeather]:
     url_hourly = f"{URL}&exclude=current,minutely,daily,alerts"
 
@@ -34,7 +44,7 @@ async def fetch_hourly_weather_data() -> List[HourlyWeather]:
         ))
     return hourly_weather
     
-
+@cached(current_cache)
 async def fetch_current_weather_data() -> CurrentWeather:
     url_current = f"{URL}&exclude=minutely,hourly,daily,alerts"
 

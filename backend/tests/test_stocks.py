@@ -1,6 +1,9 @@
 import pytest
-from app.models import StockSymbol
+from app.models import Stock
 from sqlmodel import select
+from app.models import StockPriceEntry
+from zoneinfo import ZoneInfo
+from datetime import datetime, timedelta
 
 # Define the raw data for tests
 RAW_QUOTE_DATA = {
@@ -35,23 +38,25 @@ RAW_HISTORY_DATA = {
     },
     "values": [
         {
-            "datetime": "2023-11-01 10:00:00",
-            "open": "172.00",
-            "high": "172.50",
-            "low": "171.90",
-            "close": "172.10",
-            "volume": "1000"
-        },
-        {
             "datetime": "2023-11-01 09:59:00",
             "open": "171.00",
             "high": "171.50",
             "low": "170.90",
             "close": "171.20",
             "volume": "1500"
+        },
+        {
+            "datetime": "2023-11-01 10:00:00",
+            "open": "172.00",
+            "high": "172.50",
+            "low": "171.90",
+            "close": "172.10",
+            "volume": "1000"
         }
     ]
 }
+
+TZ_NY = ZoneInfo("America/New_York")
 
 # pytest tests/test_stocks.py::test_stock_watchlist
 def test_stock_watchlist(sync_client, session):
@@ -63,7 +68,7 @@ def test_stock_watchlist(sync_client, session):
     assert add_response.status_code == 200
     assert add_response.json() == payload
 
-    symbols_in_db = session.exec(select(StockSymbol)).all()
+    symbols_in_db = session.exec(select(Stock)).all()
     assert len(symbols_in_db) == 1
     added_item = symbols_in_db[0]
     assert added_item.symbol == "AAPL"
@@ -80,17 +85,38 @@ def test_stock_watchlist(sync_client, session):
     assert delete_response.status_code == 200
     assert delete_response.json() == {"status" : "Stock deleted"}
     
-    deleted_symbol = session.get(StockSymbol, "AAPL")
+    deleted_symbol = session.get(Stock, "AAPL")
     assert deleted_symbol is None
+
+# pytest tests/test_stocks.py::test_stock_pruning
+def test_stock_pruning(sync_client, session):
+    # Add two price entries
+    time_now = datetime.now()
+    price1 = StockPriceEntry(symbol="AAPL", interval="1min", timestamp=time_now-timedelta(days=3), price=0.0)
+    price2 = StockPriceEntry(symbol="NVDA", interval="1min", timestamp=time_now, price=0.0)
+    session.add(price1)
+    session.add(price2)
+    session.commit()
+
+    response = sync_client.delete("/stocks/history/prune")
+    assert response.status_code == 200
+
+    db_entries = session.exec(select(StockPriceEntry)).all()
+    assert len(db_entries) == 1
+    assert db_entries[0].symbol == "NVDA"
+    
 
 # pytest tests/test_stocks.py::test_get_stock_quotes
 @pytest.mark.asyncio
-async def test_get_stock_quotes(async_client, mock_httpx_client):
+async def test_get_stock_quotes(async_client, mock_httpx_client, mocker):
     """Test getting quote from a single stock"""
     mock_client = mock_httpx_client(
         patch_target="app.services.stocks_service.httpx.AsyncClient",
         response_data=RAW_QUOTE_DATA
     )
+    mocker.patch("app.services.stocks_service.memory_cache", {})
+    mocker.patch("app.services.stocks_service.token_manager.has_tokens", return_value=True)
+    mocker.patch("app.services.stocks_service.rate_limiter.can_request", return_value=True)
 
     response = await async_client.get("/stocks/quotes?symbols=AAPL")
 
@@ -102,7 +128,8 @@ async def test_get_stock_quotes(async_client, mock_httpx_client):
         "percent_change": 1.75,
         "high": 175.00,
         "low": 169.00,
-        "volume": 50000000
+        "volume": 50000000,
+        "timestamp": "2023-10-31T20:53:20-04:00"
     }]
 
     assert response.status_code == 200
@@ -111,26 +138,32 @@ async def test_get_stock_quotes(async_client, mock_httpx_client):
 
 # pytest tests/test_stocks.py::test_get_stock_history
 @pytest.mark.asyncio
-async def test_get_stock_history(async_client, mock_httpx_client):
+async def test_get_stock_history(async_client, mock_httpx_client, mocker):
     """Test getting history data from a stock"""
     mock_client = mock_httpx_client(
         patch_target="app.services.stocks_service.httpx.AsyncClient",
         response_data=RAW_HISTORY_DATA
     )
+    mocker.patch("app.services.stocks_service.token_manager.has_tokens", return_value=True)
+    mocker.patch("app.services.stocks_service.rate_limiter.can_request", return_value=True)
 
-    response = await async_client.get("/stocks/history?symbols=a&interval=1min&count=1")
+    response = await async_client.get("/stocks/history?symbols=AAPL&interval=1min")
 
     expected_data = [{
         "symbol": "AAPL",
         "history": [
             {
                 # Oldest first (Reversed)
-                "time": "2023-11-01T13:59:00Z", 
+                "symbol": "AAPL",
+                "interval": "1min",
+                "timestamp": "2023-11-01T13:59:00Z", 
                 "price": 171.20
             },
             {
                 # Newest last
-                "time": "2023-11-01T14:00:00Z",
+                "symbol": "AAPL",
+                "interval": "1min",
+                "timestamp": "2023-11-01T14:00:00Z",
                 "price": 172.10
             }
         ]

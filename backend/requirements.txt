@@ -7,3 +7,7 @@ todoist-api-python>=3.1.0
 pytest>=8.0.0
 pytest-mock>=3.10.0
 pytest-asyncio>=0.24.0
+pytest-env>=1.0.0
+influxdb-client>=1.40.0
+cachetools>=6.0.0
+asyncache

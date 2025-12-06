@@ -5,12 +5,21 @@ from typing import List
 from dotenv import load_dotenv
 from app.schemas import StopTimeEntry, StopTimetable
 from datetime import datetime, timezone
+from cachetools import TTLCache
+from asyncache import cached
 
 load_dotenv()
 
+# API config
 API_KEY = os.getenv("DIGITRANSIT_API_KEY")
 # Digitransit GraphQL endpoint
 URL = "https://api.digitransit.fi/routing/v2/waltti/gtfs/v1"
+
+# Cache config
+# Cache config
+IS_TESTING = os.getenv("TESTING", "False") == "True"
+CACHE_SIZE = 0 if IS_TESTING else 1
+timetable_cache = TTLCache(maxsize=CACHE_SIZE, ttl=60)
 
 # GraphQL Query for stop timetable
 STOP_QUERY = """
@@ -33,6 +42,7 @@ query getStopTimetable($stopId: String!) {
 }
 """
 
+@cached(timetable_cache)
 async def fetch_stop_data(gtfs_ids: str) -> List[StopTimetable]:
     """Fetch data for all requested stops in parallel using a single connection pool"""
     # Extract stop ids from comma separated string
