@@ -1,8 +1,9 @@
 import pytest
 from app.models import Stock
 from sqlmodel import select
-from datetime import datetime
+from app.models import StockPriceEntry
 from zoneinfo import ZoneInfo
+from datetime import datetime, timedelta
 
 # Define the raw data for tests
 RAW_QUOTE_DATA = {
@@ -86,6 +87,24 @@ def test_stock_watchlist(sync_client, session):
     
     deleted_symbol = session.get(Stock, "AAPL")
     assert deleted_symbol is None
+
+# pytest tests/test_stocks.py::test_stock_pruning
+def test_stock_pruning(sync_client, session):
+    # Add two price entries
+    time_now = datetime.now()
+    price1 = StockPriceEntry(symbol="AAPL", interval="1min", timestamp=time_now-timedelta(days=3), price=0.0)
+    price2 = StockPriceEntry(symbol="NVDA", interval="1min", timestamp=time_now, price=0.0)
+    session.add(price1)
+    session.add(price2)
+    session.commit()
+
+    response = sync_client.delete("/stocks/history/prune")
+    assert response.status_code == 200
+
+    db_entries = session.exec(select(StockPriceEntry)).all()
+    assert len(db_entries) == 1
+    assert db_entries[0].symbol == "NVDA"
+    
 
 # pytest tests/test_stocks.py::test_get_stock_quotes
 @pytest.mark.asyncio

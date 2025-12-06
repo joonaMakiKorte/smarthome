@@ -63,9 +63,9 @@ async def get_historical_data(
     async with handle_upstream_errors("Twelve Data"):
         return await stocks_service.get_smart_stock_history(symbols, interval, session)
     
-@router.post("/stocks/history/prune")
+@router.delete("/stocks/history/prune")
 def prune_stock_history(session: Session = Depends(get_session)):
-    """Prune history older than 48 hours from db."""
+    """Prune history older than 48 hours."""
     cutoff = datetime.now(ZoneInfo("America/New_York")) - timedelta(days=2)
     statement = delete(StockPriceEntry).where(StockPriceEntry.timestamp < cutoff)
     
