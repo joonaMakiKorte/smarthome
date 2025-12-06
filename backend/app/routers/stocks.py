@@ -1,11 +1,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlmodel import Session, select
+from sqlmodel import Session, select, delete
 from app.database import get_session
 from app.services import stocks_service
 from app.utils import handle_upstream_errors
 from typing import List
 from app.schemas import StockHistoryData
-from app.models import Stock, StockQuote
+from app.models import Stock, StockQuote, StockPriceEntry
+from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 router = APIRouter()
 
@@ -48,16 +50,27 @@ async def get_stock_quotes(
     symbols: str = Query(..., description="Comma separated symbols, e.g. 'AAPL' or 'AAPL,MSFT'"),
     session: Session = Depends(get_session)):
     """Get real-time stock quotes from Twelve Data"""
-    #async with handle_upstream_errors("Twelve Data"):
-    return await stocks_service.get_smart_stock_quote(symbols, session)
+    async with handle_upstream_errors("Twelve Data"):
+        return await stocks_service.get_smart_stock_quote(symbols, session)
     
 @router.get("/stocks/history", response_model=List[StockHistoryData])
 async def get_historical_data(
     symbols: str = Query(..., description="Comma separated symbols, e.g. 'AAPL' or 'AAPL,MSFT'"),
-    interval: str = Query("1day", description="Timeframe: 1min, 5min, 1h, 1day"),
-    count: int = Query(30, description="Number of data points to return")
+    interval: str = Query("5min", description="Timeframe: 1min, 5min, 1h"),
+    session: Session = Depends(get_session)
 ):
     """Get historical data for stocks."""
     async with handle_upstream_errors("Twelve Data"):
-        return await stocks_service.fetch_stock_history(symbols,interval,count)
+        return await stocks_service.fetch_stock_history(symbols, interval, session)
     
+@router.post("/stocks/history/prune")
+def prune_stock_history(session: Session = Depends(get_session)):
+    """Prune history older than 48 hours from db."""
+    cutoff = datetime.now(ZoneInfo("America/New_York")) - timedelta(days=2)
+    statement = delete(StockPriceEntry).where(StockPriceEntry.timestamp < cutoff)
+    
+    # Run the deletion
+    result = session.exec(statement)
+    session.commit()
+    print(f"Pruned {result.rowcount} old history entries.")
+    return {"status" : "Stock history pruned."}

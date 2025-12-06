@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 from sqlmodel import Session, select
 from app.schemas import StockHistoryData
 from app.models import Stock, StockQuote, StockPriceEntry
-from datetime import datetime, time, timedelta
+from datetime import datetime, time, timedelta, timezone
 from zoneinfo import ZoneInfo
 from cachetools import TTLCache
 from collections import deque
@@ -101,7 +101,6 @@ def _get_last_market_close() -> datetime:
 async def get_smart_stock_quote(symbols: str, session: Session) -> List[StockQuote]:
     """Get stock quotes ensuring token ratelimits and db fallback"""
     symbol_list = symbols.split(',')
-
     results = {}
 
     # Check in-memory cache
@@ -128,7 +127,7 @@ async def get_smart_stock_quote(symbols: str, session: Session) -> List[StockQuo
     symbols_to_fetch = [] # Keep track of missing symbols
     for sym in missing_symbols:
         db_data = db_map.get(sym)
-        if db_data and last_market_close and db_data.timestamp >= last_market_close:
+        if db_data and last_market_close and db_data.timestamp.astimezone(TZ_NY) >= last_market_close:
             results[sym] = db_data
             memory_cache[f"quote_{sym}"] = db_data
         else:
@@ -187,7 +186,7 @@ async def _fetch_realtime_market_data(symbols: List[str]) -> List[StockQuote]:
             high = round(float(data["high"]), 2),
             low = round(float(data["low"]), 2),
             volume = int(data["volume"]),
-            timestamp=datetime.fromtimestamp(data["timestamp"],tz=TZ_NY)
+            timestamp=datetime.fromtimestamp(data["timestamp"],tz=timezone.utc)
         ))
     # Twelve Data returns a dict keyed by symbol for multiple symbols requested
     else:
@@ -201,17 +200,102 @@ async def _fetch_realtime_market_data(symbols: List[str]) -> List[StockQuote]:
                 high = round(float(details["high"]), 2),
                 low = round(float(details["low"]), 2),
                 volume = int(details["volume"]),
-                timestamp=datetime.fromtimestamp(details["timestamp"],tz=TZ_NY)
+                timestamp=datetime.fromtimestamp(details["timestamp"],tz=timezone.utc)
             ))
     return results
 
-async def fetch_stock_history(symbols: str, interval: str, count: int) -> List[StockHistoryData]:
+def _get_target_session_window():
+    """Returns the start and end datetime for the data we should display."""
+    last_market_close = _get_last_market_close()
+    target_date = datetime.now(TZ_NY).date() if last_market_close is None else last_market_close.date()
+    start_dt = datetime.combine(target_date, MARKET_OPEN, TZ_NY)
+    end_dt = datetime.combine(target_date, MARKET_CLOSE, TZ_NY)
+    return start_dt, end_dt
+
+async def get_smart_stock_history(symbols: str, interval: str, session: Session) -> List[StockHistoryData]:
+    """Fetch stock sparlines ensuring token ratelimits and db fallback"""
+    start_dt, end_dt = _get_target_session_window()
+
+    # Fetch entries fitting the window from db
+    symbol_list = symbols.split(',')
+    db_entries_flat = await run_in_threadpool(lambda: session.exec(
+        select(StockPriceEntry)
+        .where(
+            StockPriceEntry.symbol.in_(symbol_list),
+            StockPriceEntry.interval == interval,
+            StockPriceEntry.timestamp >= start_dt,
+            StockPriceEntry.timestamp <= end_dt
+        )
+        .order_by(StockPriceEntry.timestamp.asc())
+    ).all())
+
+    # Map entries to symbols
+    history_map = {sym: [] for sym in symbol_list}
+    for entry in db_entries_flat:
+        if entry.symbol in history_map:
+            history_map[entry.symbol].append(entry)
+
+    # Determine which symbols are missing or stale
+    now = datetime.now(TZ_NY)
+    symbols_to_fetch = []
+    
+    is_market_hours = start_dt.date() == now.date() and MARKET_OPEN <= now.time() < MARKET_CLOSE
+    for sym in symbol_list:
+        entries = history_map[sym]
+        if not entries:
+            # No data in this window
+            symbols_to_fetch.append(sym)
+            continue
+
+        if is_market_hours:
+            last_candle_time = entries[-1].timestamp.astimezone(TZ_NY)
+            if (now - last_candle_time).total_seconds() > 3600:
+                # Data is older than 60 mins
+                symbols_to_fetch.append(sym)
+
+    if symbols_to_fetch:
+        if token_manager.has_tokens() and rate_limiter.can_request():
+            api_results = await _fetch_stock_history(symbols_to_fetch, start_dt, end_dt, interval)
+
+            for stock_data in api_results:
+                # Update the return map
+                history_map[stock_data.symbol] = stock_data.history
+                
+                # Persist to DB 
+                for entry in stock_data.history:
+                    entry.symbol = stock_data.symbol # Ensure FK is set
+                    entry.interval = interval
+                    session.merge(entry) # Upsert
+                
+            session.commit()
+
+    return [
+        StockHistoryData(symbol=sym, history=history_map[sym]) 
+        for sym in symbol_list
+    ]
+
+
+async def _fetch_stock_history(symbols: List[str], start_dt: datetime, end_dt: datetime, interval: str) -> List[StockHistoryData]:
     """Fetch sparkline for given symbols"""
+    # Format dates to strings expected by Twelve Data
+    start_str = start_dt.strftime("%Y-%m-%d %H:%M:%S")
+    end_str = end_dt.strftime("%Y-%m-%d %H:%M:%S")
+
     # Construct /time_series endpoint url with given symbols and interval
-    url = f"https://api.twelvedata.com/time_series?symbol={symbols}&interval={interval}&outputsize={count}&apikey={API_KEY}"
+    symbols_str = ",".join(symbols)
+    url = "https://api.twelvedata.com/time_series"
+    params = {
+        "symbol": symbols_str,
+        "interval": interval,
+        "start_date": start_str,
+        "end_date": end_str,
+        "apikey": API_KEY,
+        "dp": 2,
+        "order": 'ASC' 
+    }
 
     async with httpx.AsyncClient(timeout=10.0) as client:
-        response = await client.get(url)
+        response = await client.get(url, params=params)
         response.raise_for_status()
         data = response.json()
 
@@ -227,28 +311,27 @@ async def fetch_stock_history(symbols: str, interval: str, count: int) -> List[S
     if "values" in data:
         results.append(StockHistoryData(
             symbol = data["meta"]["symbol"],
-            history = _process_values(data["values"], data["meta"]["exchange_timezone"])
+            history = _process_values(data["values"], data["meta"]["exchange_timezone"], interval)
         ))
     # For multiple symbols, returns dict keys for each symbol
     else: 
         for symbol, details in data.items():
             results.append(StockHistoryData(
                 symbol = symbol,
-                history = _process_values(details["values"], details["meta"]["exchange_timezone"])
+                history = _process_values(details["values"], details["meta"]["exchange_timezone"], interval)
         ))
     return results
 
-def _process_values(values_list, tz_str) -> List[StockPriceEntry]:
+def _process_values(values_list, tz_str, interval: str) -> List[StockPriceEntry]:
     """
     Helper to extract stock price entries from time series endpoint.
     Uses timezone to conver datetime to UTC.
     """
-    # Reverse data for correct order [Oldest -> Newest]
-    reversed_data = values_list[::-1]
-
     return [StockPriceEntry(
-        time = datetime.strptime(item["datetime"], "%Y-%m-%d %H:%M:%S")
+        timestamp = datetime.strptime(item["datetime"], "%Y-%m-%d %H:%M:%S")
         .replace(tzinfo=ZoneInfo(tz_str))
         .astimezone(ZoneInfo("UTC")),
-        price = float(item["close"])
-    ) for item in reversed_data]
+        price = float(item["close"]),
+        interval = interval,
+        symbol = ""
+    ) for item in values_list]
