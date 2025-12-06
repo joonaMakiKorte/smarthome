@@ -4,19 +4,19 @@ from app.database import get_session
 from app.services import stocks_service
 from app.utils import handle_upstream_errors
 from typing import List
-from app.schemas import StockQuoteData, StockHistoryData
-from app.models import StockSymbol
+from app.schemas import StockHistoryData
+from app.models import Stock, StockQuote
 
 router = APIRouter()
 
-@router.get("/stocks/watchlist", response_model=List[StockSymbol])
+@router.get("/stocks/watchlist", response_model=List[Stock])
 def get_watchlist(session: Session = Depends(get_session)):
     """Get current stock watchlist from db"""
-    symbols = session.exec(select(StockSymbol)).all()
+    symbols = session.exec(select(Stock)).all()
     return symbols
 
 @router.post("/stocks/watchlist")
-def add_stock(stock: StockSymbol, session: Session = Depends(get_session)):
+def add_stock(stock: Stock, session: Session = Depends(get_session)):
     """Add a new stock to watchlist"""
     try:
         session.add(stock)
@@ -32,7 +32,7 @@ def add_stock(stock: StockSymbol, session: Session = Depends(get_session)):
 @router.delete("/stocks/watchlist/{symbol}")
 def remove_stock(symbol: str, session: Session = Depends(get_session)):
     """Delete a stock from watchlist"""
-    stock = session.get(StockSymbol, symbol)
+    stock = session.get(Stock, symbol)
     if not stock:
         print("Error deleting stock from watchlist")
         raise HTTPException(
@@ -43,11 +43,13 @@ def remove_stock(symbol: str, session: Session = Depends(get_session)):
     session.commit()
     return {"status" : "Stock deleted"}
 
-@router.get("/stocks/quotes", response_model=List[StockQuoteData])
-async def get_stock_quotes(symbols: str = Query(..., description="Comma separated symbols, e.g. 'AAPL' or 'AAPL,MSFT'")):
+@router.get("/stocks/quotes", response_model=List[StockQuote])
+async def get_stock_quotes(
+    symbols: str = Query(..., description="Comma separated symbols, e.g. 'AAPL' or 'AAPL,MSFT'"),
+    session: Session = Depends(get_session)):
     """Get real-time stock quotes from Twelve Data"""
     async with handle_upstream_errors("Twelve Data"):
-        return await stocks_service.fetch_realtime_market_data(symbols)
+        return await stocks_service.get_smart_stock_quote(symbols, session)
     
 @router.get("/stocks/history", response_model=List[StockHistoryData])
 async def get_historical_data(
