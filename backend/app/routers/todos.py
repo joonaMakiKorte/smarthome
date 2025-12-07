@@ -11,14 +11,16 @@ router = APIRouter()
 
 @router.get("/todos", response_model=List[TodoTask])
 async def read_todos():
-    """Fetch all active todos from Todoist."""
+    """Fetch all active todos."""
     async with handle_upstream_errors("Todoist"):
-        return await todoist_service.fetch_all_tasks()
-
-@router.get("/todos/completed", response_model=List[CompletedTask])
-def read_completed_todos(session: Session = Depends(get_session)):
-    """Fetch the last 10 completed todos from the local database."""
-    return todoist_service.fetch_completed_tasks(session)
+        return await todoist_service.get_tasks()
+    
+@router.post("/todos/refresh")
+async def refresh_active_todos():
+    """Refresh active todos from Todoist."""
+    async with handle_upstream_errors("Todoist"):
+        await todoist_service.refresh_tasks()
+        return {"status" : "Todos refreshed"}
 
 @router.post("/todos/{task_id}/complete")
 async def complete_todo(task_id: str, task_content: str, priority: int, session: Session = Depends(get_session)):
@@ -30,7 +32,7 @@ async def complete_todo(task_id: str, task_content: str, priority: int, session:
             raise HTTPException(
                 status_code=400,
                 detail="Could not complete task in Todoist")
-        return {"status": "Task completed"}
+        return {"status" : "Task completed"}
 
 @router.post("/todos/{task_id}/reopen")
 async def reopen_todo(task_id: str, session: Session = Depends(get_session)):
@@ -43,3 +45,8 @@ async def reopen_todo(task_id: str, session: Session = Depends(get_session)):
             status_code=400,
             detail="Could not reopen task in Todoist")
     return {"status": "Task reopened"}
+
+@router.get("/todos/completed", response_model=List[CompletedTask])
+def read_completed_todos(session: Session = Depends(get_session)):
+    """Fetch the last 10 completed todos from the local database."""
+    return todoist_service.fetch_completed_tasks(session)

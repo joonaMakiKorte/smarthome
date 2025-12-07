@@ -25,7 +25,7 @@ MARKET_CLOSE = time(hour=16)
 
 # Cache config
 IS_TESTING = os.getenv("TESTING", "False") == "True"
-CACHE_SIZE = 0 if IS_TESTING else 100
+CACHE_SIZE = 0 if IS_TESTING else 64
 memory_cache = TTLCache(maxsize=CACHE_SIZE, ttl=60)
 
 
