@@ -13,14 +13,43 @@ async def fetch_and_store_electricity_prices(session: Session):
     Fetches electricity prices from API and saves to DB (Upsert).
     Handles deletion of electricity data older than 10 days.
     """
+    # Check if we already have the latest data
+    should_fetch = await run_in_threadpool(_check_if_fetch_needed, session)
+    if not should_fetch:
+        return
+
     async with httpx.AsyncClient(timeout=10.0) as client:
         response = await client.get(URL)
         response.raise_for_status()
         data = response.json()
 
     # Write to db
+    await run_in_threadpool(_batch_upsert_and_delete, session, data)
+
+def _check_if_fetch_needed(session: Session) -> bool:
+    # Get the latest timestamp in db
+    statement = select(func.max(ElectricityPrice.start_time))
+    latest_ts = session.exec(statement).first()
+
+    if not latest_ts:
+        # DB is empty
+        return True
+
+    # Get tomorrows date
+    now = datetime.now(tz=timezone.utc)
+    tomorrow_date = now.date() + timedelta(days=1)
+
+    # If latest timestamp found is tomorrow, it means we have the full day
+    # (porssisahko.net returns full day data at once)
+    latest_date = latest_ts.date()
+
+    return latest_date < tomorrow_date 
+    
+def _batch_upsert_and_delete(session: Session, api_data):
+    """Write electricity prices to db and cleanup old data"""
+    # Write to db
     try:
-        for entry in data["prices"]:
+        for entry in api_data["prices"]:
             session.merge(ElectricityPrice(
                 start_time=datetime.fromisoformat(entry["startDate"].replace("Z", "+00:00")),
                 end_time=datetime.fromisoformat(entry["endDate"].replace("Z", "+00:00")),

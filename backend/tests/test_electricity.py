@@ -3,32 +3,40 @@ from sqlmodel import select
 from app.models import ElectricityPrice
 from datetime import datetime, timedelta, timezone
 
-RAW_PRICE_DATA = {
-    "prices": [
-        {
-            "startDate": "2025-11-26T00:00:00Z",
-            "endDate": "2024-11-26T01:00:00Z",
-            "price": 50.0
-        },
-        {
-            "startDate": "2025-11-26T01:00:00Z",
-            "endDate": "2025-11-26T02:00:00Z",
-            "price": 45.0
-        }
-    ]
-}
-
-RAW_EMPTY_PRICE_DATA = {
-    "prices": []
-}
-
 # pytest tests/test_electricity.py::test_refreshing_electricity_prices
 @pytest.mark.asyncio
 async def test_refreshing_electricity_prices(async_client, mock_httpx_client, session):
     """Test refreshing electricity prices from external API and storing them in DB."""
+    # Generate json price data with dynamic dates to avoid old data deletion
+    now_utc = datetime.now(timezone.utc)
+    start_1 = now_utc + timedelta(days=1)
+    end_1 = start_1 + timedelta(hours=1)
+    
+    start_2 = start_1 + timedelta(hours=1)
+    end_2 = start_2 + timedelta(hours=1)
+
+    # Helper to format as API expects: "2025-11-26T00:00:00Z"
+    def fmt(dt):
+        return dt.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+
+    dynamic_price_data = {
+        "prices": [
+            {
+                "startDate": fmt(start_1),
+                "endDate": fmt(end_1),
+                "price": 50.0
+            },
+            {
+                "startDate": fmt(start_2),
+                "endDate": fmt(end_2),
+                "price": 45.0
+            }
+        ]
+    }
+
     mock_client = mock_httpx_client(
         patch_target="app.services.electricity_service.httpx.AsyncClient",
-        response_data=RAW_PRICE_DATA
+        response_data=dynamic_price_data
     )
 
     response = await async_client.post("/electricity/refresh")
@@ -120,7 +128,7 @@ async def test_delete_old_entry(async_client, session, mock_httpx_client):
     # Patch empty data to only hit the deletion functionality
     mock_client = mock_httpx_client(
         patch_target="app.services.electricity_service.httpx.AsyncClient",
-        response_data=RAW_EMPTY_PRICE_DATA
+        response_data={"prices": []}
     )
 
     response = await async_client.post("/electricity/refresh")
