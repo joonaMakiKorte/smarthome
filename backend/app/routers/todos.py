@@ -25,14 +25,14 @@ async def refresh_active_todos():
 @router.post("/todos/{task_id}/complete")
 async def complete_todo(task_id: str, task_content: str, priority: int, session: Session = Depends(get_session)):
     """Complete a todo task in Todoist and log it in the local database."""
-    async with handle_upstream_errors("Todoist"):
-        success = await todoist_service.complete_task(session, task_id, task_content, priority)
-        if not success:
-            print("Error completing task in Todoist")
-            raise HTTPException(
-                status_code=400,
-                detail="Could not complete task in Todoist")
-        return {"status" : "Task completed"}
+    #async with handle_upstream_errors("Todoist"):
+    success = await todoist_service.complete_task(session, task_id, task_content, priority)
+    if not success:
+        print("Error completing task in Todoist")
+        raise HTTPException(
+            status_code=400,
+            detail="Could not complete task in Todoist")
+    return {"status" : "Task completed"}
 
 @router.post("/todos/{task_id}/reopen")
 async def reopen_todo(task_id: str, session: Session = Depends(get_session)):

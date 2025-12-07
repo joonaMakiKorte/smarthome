@@ -1,26 +1,41 @@
 import pytest
 from app.models import CompletedTask
 from datetime import datetime, timedelta
+from app.services.todoist_service import task_cache, TodoTask
+
+@pytest.fixture(autouse=True)
+def reset_task_cache():
+    """Automatically runs before every test to clear the global singleton cache."""
+    # 1. Clear the list
+    task_cache._cache = []
+    # 2. Reset initialization flags
+    task_cache._last_updated = None
+    task_cache._is_initialized = False
+    yield
 
 # pytest tests/test_todos.py::test_read_todos
 @pytest.mark.asyncio
 async def test_read_todos(async_client, mocker):
-    """Test fetching current todos"""
+    """Test fetching current todos by pre-seeding the singleton cache"""
     mock_data = [
         {"id": "1", "content": "Test Task 1", "priority": 3},
         {"id": "2", "content": "Test Task 2", "priority": 4},
     ]
-    mock_get_tasks = mocker.patch(
-        "app.services.todoist_service.fetch_all_tasks",
-    )
-    mock_get_tasks.return_value = mock_data
+    task_cache._cache = mock_data
 
     # Call API endpoint using TestClient
     response = await async_client.get("/todos")
 
     assert response.status_code == 200
-    assert response.json() == mock_data
-    mock_get_tasks.assert_called_once()
+    expected_json = [
+        {"id": "1", "content": "Test Task 1", "priority": 3},
+        {"id": "2", "content": "Test Task 2", "priority": 4},
+    ]
+    assert response.json() == expected_json
+    
+    # Verify the cache state
+    assert len(task_cache._cache) == 2
+    assert task_cache._cache[0]["content"] == "Test Task 1"
 
 # pytest tests/test_todos.py::test_read_completed_todos
 def test_read_completed_todos(sync_client, session):

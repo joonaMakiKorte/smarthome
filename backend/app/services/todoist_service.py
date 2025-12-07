@@ -111,7 +111,7 @@ def fetch_completed_tasks(session: Session) -> List[CompletedTask]:
 
 # --- DB helpers ---
 
-def _log_completion_to_db(self, session: Session, task_id: str, content: str, priority: int):
+def _log_completion_to_db(session: Session, task_id: str, content: str, priority: int):
     """Write completed task to db. Enforces 10 item limit."""
     try:
         completed_task = CompletedTask(

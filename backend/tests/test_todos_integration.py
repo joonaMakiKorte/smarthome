@@ -5,6 +5,7 @@ from todoist_api_python.api_async import TodoistAPIAsync
 from dotenv import load_dotenv
 from app.models import CompletedTask
 
+
 load_dotenv()
 
 api_key = os.getenv("TODOIST_API_KEY")
