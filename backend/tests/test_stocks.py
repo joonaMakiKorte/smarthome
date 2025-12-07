@@ -129,7 +129,7 @@ async def test_get_stock_quotes(async_client, mock_httpx_client, mocker):
         "high": 175.00,
         "low": 169.00,
         "volume": 50000000,
-        "timestamp": "2023-10-31T20:53:20-04:00"
+        "timestamp": "2023-11-01T00:53:20Z"
     }]
 
     assert response.status_code == 200

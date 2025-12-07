@@ -4,6 +4,7 @@ from app.schemas import ElectricityPriceInterval
 from datetime import datetime, timedelta, timezone
 from sqlmodel import Session, select, func, delete
 from typing import Literal, List
+from fastapi.concurrency import run_in_threadpool
 
 URL = "https://api.porssisahko.net/v2/latest-prices.json"
 
