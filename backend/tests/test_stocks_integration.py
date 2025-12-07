@@ -5,10 +5,8 @@ from datetime import datetime
 @pytest.mark.asyncio
 async def test_real_stock_quotes(async_client, mocker):
     """Test fetching real stock quotes from api"""
-    # Disable cache and force tokens and ratelimit
+    # Disable cache
     mocker.patch("app.services.stocks_service.memory_cache", {})
-    mocker.patch("app.services.stocks_service.token_manager.has_tokens", return_value=True)
-    mocker.patch("app.services.stocks_service.rate_limiter.can_request", return_value=True)
 
     # Request real data for Apple and Microsoft
     symbols = "AAPL,MSFT"
@@ -31,8 +29,8 @@ async def test_real_stock_quotes(async_client, mocker):
 @pytest.mark.asyncio
 async def test_real_stock_history(async_client, mocker):
     """Verify timezone and sparkline data conversion."""
-    mocker.patch("app.services.stocks_service.token_manager.has_tokens", return_value=True)
-    mocker.patch("app.services.stocks_service.rate_limiter.can_request", return_value=True)
+    # Disable cache
+    mocker.patch("app.services.stocks_service.memory_cache", {})
 
     symbol = "NVDA"
     interval = "1min"

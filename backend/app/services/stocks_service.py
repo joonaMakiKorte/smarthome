@@ -214,14 +214,31 @@ def _get_target_session_window():
 
 async def get_smart_stock_history(symbols: str, interval: str, session: Session) -> List[StockHistoryData]:
     """Fetch stock sparlines ensuring token ratelimits and db fallback"""
-    start_dt, end_dt = _get_target_session_window()
+    symbol_list = symbols.split(',')
+    history_map = {sym: [] for sym in symbol_list}
+
+    # Check for history in memory cache
+    missing_symbols = []
+    for sym in symbol_list:
+        cache_key = f"history_{sym}{interval}"
+        if cache_key in memory_cache:
+            history_map[sym] = memory_cache[cache_key]
+            continue
+        missing_symbols.append(sym)
+
+    if not missing_symbols:
+        # All symbols were found in cache
+        return [
+            StockHistoryData(symbol=sym, history=history_map[sym]) 
+            for sym in symbol_list
+        ]
 
     # Fetch entries fitting the window from db
-    symbol_list = symbols.split(',')
+    start_dt, end_dt = _get_target_session_window()
     db_entries_flat = await run_in_threadpool(lambda: session.exec(
         select(StockPriceEntry)
         .where(
-            StockPriceEntry.symbol.in_(symbol_list),
+            StockPriceEntry.symbol.in_(missing_symbols),
             StockPriceEntry.interval == interval,
             StockPriceEntry.timestamp >= start_dt,
             StockPriceEntry.timestamp <= end_dt
@@ -230,7 +247,6 @@ async def get_smart_stock_history(symbols: str, interval: str, session: Session)
     ).all())
 
     # Map entries to symbols
-    history_map = {sym: [] for sym in symbol_list}
     for entry in db_entries_flat:
         if entry.symbol in history_map:
             history_map[entry.symbol].append(entry)
@@ -240,7 +256,7 @@ async def get_smart_stock_history(symbols: str, interval: str, session: Session)
     symbols_to_fetch = []
     
     is_market_hours = start_dt.date() == now.date() and MARKET_OPEN <= now.time() < MARKET_CLOSE
-    for sym in symbol_list:
+    for sym in missing_symbols:
         entries = history_map[sym]
         if not entries:
             # No data in this window
@@ -268,11 +284,16 @@ async def get_smart_stock_history(symbols: str, interval: str, session: Session)
                 
             session.commit()
 
-    return [
-        StockHistoryData(symbol=sym, history=history_map[sym]) 
-        for sym in symbol_list
-    ]
+    # Get results 
+    results = []
+    for sym in symbol_list:
+        entry = StockHistoryData(symbol=sym, history=history_map[sym])
+        results.append(entry)
+        
+        cache_key = f"history_{sym}{interval}"
+        memory_cache[cache_key] = entry
 
+    return results
 
 async def _fetch_stock_history(symbols: List[str], start_dt: datetime, end_dt: datetime, interval: str) -> List[StockHistoryData]:
     """Fetch sparkline for given symbols"""
