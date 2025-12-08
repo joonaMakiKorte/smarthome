@@ -25,7 +25,6 @@ frontend/node_modules/
 # Build Outputs
 frontend/dist/
 frontend/dist-ssr/
-# specific to "vue-tsc -b" in your script
 frontend/*.tsbuildinfo
 
 # Logs
