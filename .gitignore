@@ -1,20 +1,41 @@
+# ==========================
+# Python / Backend
+# ==========================
 .venv/
 __pycache__/
 *.pyc
+*.db
+*.ini
 .env
+
+# ==========================
+# OS / Editor / Global
+# ==========================
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
-*.db
-*.ini
+
+# ==========================
+# Vue Frontend
+# ==========================
+# Dependencies
 frontend/node_modules/
+
+# Build Outputs
 frontend/dist/
 frontend/dist-ssr/
-frontend/.env.local
-frontend/.env.*.local
+# specific to "vue-tsc -b" in your script
+frontend/*.tsbuildinfo
+
+# Logs
 frontend/npm-debug.log*
 frontend/yarn-debug.log*
 frontend/yarn-error.log*
 frontend/pnpm-debug.log*
+
+# Environment & Testing
+frontend/.env
+frontend/.env.*.local
+frontend/*.local
 frontend/coverage/
