@@ -2,12 +2,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.routers import todos, openweather, electricity, stocks, stops, ruuvitag
+from app.periodic_tasks import start_periodic_services
 from contextlib import asynccontextmanager
 from app.database import create_db_and_tables
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     create_db_and_tables()
+    await start_periodic_services()
     yield
 
 app = FastAPI(lifespan=lifespan)
