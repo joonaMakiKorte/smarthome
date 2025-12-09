@@ -1,5 +1,5 @@
 import { createApp } from 'vue'
 import './style.css'
-import TodoList from './components/TodoList.vue'
+import DashboardLayout from './components/Dashboard.vue'
 
-createApp(TodoList).mount('#app')
+createApp(DashboardLayout).mount('#app')
