@@ -1,5 +1,5 @@
 import asyncio
-from app.services import todoist_service
+from app.services import todoist_service, openweather_service
 
 async def start_periodic_services():
     """Launches all background loops as independent async tasks."""

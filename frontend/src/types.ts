@@ -10,3 +10,13 @@ export interface CompletedTask {
     priority: number;
     completed_at: string;
 }
+
+export interface CurrentWeather {
+    temperature: number;
+    temperature_feels_like: number;
+    humidity: number;
+    windSpeed: number;
+    description: string;
+    icon_code: string;
+    icon_url: string;
+}

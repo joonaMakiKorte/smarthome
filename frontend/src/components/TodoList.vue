@@ -39,21 +39,21 @@ const fetchActive = async () => {
 // --- User Actions ---
 
 const handleComplete = async (task: TodoTask) => {
-    // Pause polling while user interacts to prevent jitter
-    pause(); 
+  // Pause polling while user interacts to prevent jitter
+  pause(); 
 
-    // Optimistic UI update (remove task immediately)
-    activeTodos.value = activeTodos.value.filter(t => t.id !== task.id);
+  // Optimistic UI update (remove task immediately)
+  activeTodos.value = activeTodos.value.filter(t => t.id !== task.id);
 
-    try {
-      await todoService.completeTodo(task.id, task.content, task.priority);
-      await fetchAll(); // Full refresh
-    } catch (err) {
-      console.error("Failed to complete task", err);
-      await fetchAll(); // Revert
-    }
+  try {
+    await todoService.completeTodo(task.id, task.content, task.priority);
+    await fetchAll(); // Full refresh
+  } catch (err) {
+    console.error("Failed to complete task", err);
+    await fetchAll(); // Revert
+  }
 
-    resume(); // Restart polling
+  resume(); // Restart polling
 };
 
 const handleReopen = async (task: CompletedTask) => {
@@ -71,7 +71,7 @@ const handleReopen = async (task: CompletedTask) => {
   }
 
   resume();
-}
+};
 
 // --- Lifecycle ---
 
