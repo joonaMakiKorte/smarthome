@@ -11,3 +11,4 @@ pytest-env>=1.0.0
 influxdb-client>=1.40.0
 cachetools>=6.0.0
 asyncache
+apscheduler

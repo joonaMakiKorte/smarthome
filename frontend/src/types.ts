@@ -11,6 +11,7 @@ export interface CompletedTask {
     completed_at: string;
 }
 
+
 export interface CurrentWeather {
     temperature: number;
     temperature_feels_like: number;
@@ -26,4 +27,16 @@ export interface HourlyWeather {
     temperature: string;
     icon_code: string;
     icon_url: string;
+}
+
+
+export interface ElectricityPriceInterval {
+    time: string;
+    price: number;
+}
+
+export interface AvgElectricityPrice {
+    start_window: string;
+    end_window: string;
+    average_price: number;
 }
