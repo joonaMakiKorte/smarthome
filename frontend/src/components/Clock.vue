@@ -12,7 +12,7 @@ const isLoading = ref(false);
 
 // --- Data fetching ---
 
-// Fetch CURRENT weather
+// Fetch CURRENT weather (polled)
 const fetchCurrent = async () => {
   try {
     // Trigger loading spinner on the initial load

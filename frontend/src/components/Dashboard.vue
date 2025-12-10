@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import TodoList from './TodoList.vue';
 import Clock from './Clock.vue';
+import HourlyForecast from './HourlyForecast.vue';
 </script>
 
 <template>
@@ -18,8 +19,8 @@ import Clock from './Clock.vue';
       <span>🌡️ Ruuvi Sensors</span>
     </div>
 
-    <div class="col-start-1 col-end-[21] row-start-[12] row-end-[16] bg-slate-900/50 rounded-3xl border border-slate-800 border-dashed flex items-center justify-center text-slate-500">
-      <span>☔ 24h Forecast Graph</span>
+    <div class="col-start-1 col-end-[21] row-start-[12] row-end-[16]">
+      <HourlyForecast />
     </div>
 
     <div class="col-start-[10] col-end-[21] row-start-1 row-end-8">
