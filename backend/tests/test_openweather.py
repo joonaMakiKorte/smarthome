@@ -1,4 +1,12 @@
 import pytest
+from app.services.openweather_service import hourly_cache
+
+@pytest.fixture(autouse=True)
+def reset_hourly_cache():
+    """Automatically runs before every test to clear the global singleton cache."""
+    hourly_cache.data = None
+    hourly_cache.expiry = None
+    yield
 
 # Define sample RAW data
 RAW_HOURLY_DATA = {

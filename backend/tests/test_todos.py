@@ -6,11 +6,8 @@ from app.services.todoist_service import task_cache, TodoTask
 @pytest.fixture(autouse=True)
 def reset_task_cache():
     """Automatically runs before every test to clear the global singleton cache."""
-    # 1. Clear the list
     task_cache._cache = []
-    # 2. Reset initialization flags
     task_cache._last_updated = None
-    task_cache._is_initialized = False
     yield
 
 # pytest tests/test_todos.py::test_read_todos
