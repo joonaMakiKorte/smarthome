@@ -56,8 +56,15 @@ const fetchAvg = async () => {
 
 // --- Chart Helpers ---
 
+// Define if we have enough data to display tomorrows prices
+const isFullDay = (count: number, interval: Interval) => {
+  const minRequired = interval === '1h' ? 12 : 48; 
+  return count >= minRequired;
+};
+
 // Get the data for the specific day currently selected
 const displayedData = computed(() => {
+  const interval = selectedInterval.value;
   const allData = cache.value[selectedInterval.value] || [];
   if (!allData.length) return [];
 
@@ -65,45 +72,60 @@ const displayedData = computed(() => {
   if (selectedDay.value === 'tomorrow') {
     targetDate.setDate(targetDate.getDate() + 1);
   }
-  const targetDateStr = targetDate.toLocaleDateString();
 
-  return allData.filter(d => new Date(d.time).toLocaleDateString() === targetDateStr);
+  const targetDateStr = targetDate.toLocaleDateString();
+  const dayData = allData.filter(d => new Date(d.time).toLocaleDateString() === targetDateStr);
+
+  // Do we have enough data for tomorrow?
+  if (selectedDay.value === 'tomorrow') {
+    if (!isFullDay(dayData.length, interval)) return [];
+  }
+
+  return dayData;
 });
 
 // Global Max Price
 const globalMaxPrice = computed(() => {
   const allData = cache.value[selectedInterval.value] || [];
   const defaults = [10]; // Minimum scale base
-  
-  // Add ALL prices from cache
-  if (allData.length) {
-    defaults.push(...allData.map(d => d.price));
-  }
 
-  // Add Avg Price to ensure it fits in the view
+  // Filter out any data points from yesterday or before
+  const todayDate = new Date(now.value)
+  const relevantData = allData.filter(d => new Date(d.time) >= todayDate);
+
+  if (relevantData.length) {
+    defaults.push(...relevantData.map(d => d.price));
+  }
   if (avgPrice.value) {
     defaults.push(avgPrice.value);
   }
-
-  // Add 10% padding
-  return Math.max(Math.max(...defaults), 5) * 1.1; 
+  return Math.max(Math.max(...defaults), 5) * 1.1;
 });
 
 const hasTomorrowData = computed(() => {
-  const allData = cache.value[selectedInterval.value] || [];
+  const interval = selectedInterval.value;
+  const allData = cache.value[interval] || [];
   if (!allData.length) return false;
+
   const tomorrow = new Date(now.value);
   tomorrow.setDate(tomorrow.getDate() + 1);
-  return allData.some(d => new Date(d.time).toDateString() === tomorrow.toDateString());
+  const tomorrowStr = tomorrow.toDateString();
+  
+  const tomorrowData = allData.filter(d => new Date(d.time).toDateString() === tomorrowStr);
+  
+  // Only enambe 'Tomorrow' button if we have the full dataset
+  return isFullDay(tomorrowData.length, interval);
 });
 
 const currentPrice = computed(() => {
   const data = cache.value['15min'];
   if (!data || !data.length) return null;
+
+  const nowTime = now.value.getTime();
   return data.find(d => {
-    const t = new Date(d.time);
-    const end = new Date(t.getTime() + 15 * 60000);
-    return now.value >= t && now.value < end;
+    const tStart = new Date(d.time).getTime();
+    const tEnd = tStart + (15 * 60000);
+    return nowTime >= tStart && nowTime < tEnd;
   });
 });
 
@@ -274,7 +296,7 @@ onUnmounted(() => {
             class="text-4xl font-black tracking-tight"
             :class="getPriceColorClass(currentPrice.price)"
           >
-            {{ currentPrice.price.toFixed(1) }}
+            {{ currentPrice.price.toFixed(2) }}
           </span>
           <span class="text-sm text-slate-500 font-medium">c/kWh</span>
         </div>
