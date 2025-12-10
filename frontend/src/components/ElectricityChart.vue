@@ -11,24 +11,28 @@ type ViewDay = 'today' | 'tomorrow'
 const COLORS = {
   low: '#84cc16',    // Lime-500 (Cheap)
   medium: '#eab308', // Yellow-500 (Moderate)
-  high: '#f97316',   // Orange-500 (Expensive)
+  high: '#f97316',   // Orange-500
+  avgLine: '#22d3ee' // Cyan-400 (For the horizontal avg line)
 };
 
 // State
 const cache = ref<{ [key in Interval]?: ElectricityPriceInterval[] }>({});
+const avgPrice = ref<number | null>(null); // Storing just the price value
 const selectedInterval = ref<Interval>('15min');
 const selectedDay = ref<ViewDay>('today');
 const isLoading = ref(false);
 
+const now = ref(new Date());
 const canvasRef = ref<HTMLCanvasElement | null>(null);
 let resizeObserver: ResizeObserver | null = null;
+let pollInterval: ReturnType<typeof setInterval> | null = null;
 
 // --- Data Fetching ---
 
 // Fetch ALL valid data (Today + Tomorrow)
-const fetchData = async (interval: Interval) => {
-  // Check cache for data
-  if (cache.value[interval]) return;
+const fetchData = async (interval: Interval, force: boolean = false) => {
+  // Check cache for data (if not forced update)
+  if (!force && cache.value[interval]) return;
   try {
     isLoading.value = true;
     const data = await electricityService.getElectricityPrices(interval);
@@ -40,6 +44,18 @@ const fetchData = async (interval: Interval) => {
   }
 };
 
+// Fetch 10-day avg price
+const fetchAvg = async () => {
+  try {
+    const data = await electricityService.getElectricityAvg();
+    if (data && typeof data.average_price === 'number') {
+      avgPrice.value = data.average_price;
+    }
+  } catch (err) {
+    console.error("Fetch failed", err);
+  }
+}
+
 // --- Chart Helpers ---
 
 // Data for the currently selected day
@@ -47,8 +63,7 @@ const displayedData = computed(() => {
   const allData = cache.value[selectedInterval.value] || [];
   if (!allData.length) return [];
 
-  const now = new Date();
-  const targetDate = new Date(now);
+  const targetDate = new Date(now.value);
   if (selectedDay.value === 'tomorrow') {
     targetDate.setDate(targetDate.getDate() + 1);
   }
@@ -57,33 +72,31 @@ const displayedData = computed(() => {
   return allData.filter(d => new Date(d.time).toLocaleDateString() === targetDateStr);
 });
 
-// Global Max Price (For consistent scaling across days)
+// Global Max Price 
 const globalMaxPrice = computed(() => {
   const allData = cache.value[selectedInterval.value] || [];
   if (!allData.length) return 10; // Default fallback
-  // Get max from ALL data (Today + Tomorrow) to keep scale consistent
   return Math.max(Math.max(...allData.map(d => d.price)), 5) * 1.1; 
 });
 
 const hasTomorrowData = computed(() => {
   const allData = cache.value[selectedInterval.value] || [];
   if (!allData.length) return false;
-  const tomorrow = new Date();
+  const tomorrow = new Date(now.value);
   tomorrow.setDate(tomorrow.getDate() + 1);
   return allData.some(d => new Date(d.time).toDateString() === tomorrow.toDateString());
 });
 
-// Find Current Price (Always uses 15min data for accuracy)
+// Find Current Price
 const currentPrice = computed(() => {
   const data = cache.value['15min'];
   if (!data || !data.length) return null;
 
-  const now = new Date();
   // Find the interval that covers the current time
   return data.find(d => {
     const t = new Date(d.time);
     const end = new Date(t.getTime() + 15 * 60000); // +15 mins
-    return now >= t && now < end;
+    return now.value >= t && now.value < end;
   });
 });
 
@@ -106,10 +119,9 @@ const drawChart = () => {
   const W = rect.width;
   const H = rect.height;
 
-  // Clear
   ctx.clearRect(0, 0, W, H);
 
-  // Scaling: Use the Unified Global Max
+  // Scaling
   const maxVal = globalMaxPrice.value;
   const barWidth = (W / data.length); // Full width per slot
   const gap = data.length > 50 ? 0.5 : 1; // Smaller gap for 15min view
@@ -126,17 +138,37 @@ const drawChart = () => {
     if (price >= 10) color = COLORS.high;
 
     ctx.fillStyle = color;
-    // Draw bar with gap
     ctx.fillRect(x, y, Math.max(barWidth - gap, 1), barHeight);
   });
 
-  // Current Time Line (Only for Today)
+  // Draw Average Price Line
+  if (avgPrice.value !== null) {
+    const avgY = H - ((avgPrice.value / maxVal) * H);
+    
+    // Line
+    ctx.beginPath();
+    ctx.strokeStyle = COLORS.avgLine;
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]); // Dashed
+    ctx.moveTo(0, avgY);
+    ctx.lineTo(W, avgY);
+    ctx.stroke();
+
+    // Label
+    ctx.fillStyle = COLORS.avgLine;
+    ctx.font = 'bold 10px monospace';
+    ctx.fillText(`AVG ${avgPrice.value.toFixed(1)}`, W - 50, avgY - 4);
+    
+    // Reset Dash
+    ctx.setLineDash([]);
+  }
+
+  // Current Time Line 
   if (selectedDay.value === 'today') {
-    const now = new Date();
     const currentIndex = data.findIndex(d => {
       const t = new Date(d.time);
-      return t.getHours() === now.getHours() && 
-             (selectedInterval.value === '1h' || Math.floor(t.getMinutes() / 15) === Math.floor(now.getMinutes() / 15));
+      return t.getHours() === now.value.getHours() && 
+             (selectedInterval.value === '1h' || Math.floor(t.getMinutes() / 15) === Math.floor(now.value.getMinutes() / 15));
     });
 
     if (currentIndex !== -1) {
@@ -161,11 +193,48 @@ const getPriceColorClass = (price: number) => {
 
 // --- Lifecycle ---
 
-watch([displayedData, selectedInterval, selectedDay], () => nextTick(drawChart));
+const startPoller = () => {
+  // Run every 60 seconds
+  pollInterval = setInterval(() => {
+    const current = new Date();
+    const prevMinute = now.value.getMinutes();
+    
+    // Detect Day Change (00:00)
+    if (current.getDate() !== now.value.getDate()) {
+      // Clear cache and hard refresh
+      cache.value = {}; 
+      selectedDay.value = 'today'; // Reset view to today
+      fetchData('1h', true);
+      fetchData('15min', true);
+      fetchAvg(); 
+    }
+
+    // Poll average price every 15 minutes
+    if (current.getMinutes() % 15 === 0 && current.getMinutes() !== prevMinute) {
+      fetchAvg();
+    }
+
+    // Check for 14:00 Data Release
+    const hour = current.getHours();
+    if (hour >= 14 && !hasTomorrowData.value) {
+      // Silent fetching (retry every minute until data for tomorrow)
+      fetchData('1h', true); 
+      fetchData('15min', true);
+    }
+
+    // Update reactive time
+    now.value = current;
+
+  }, 60000); // Run every 60 seconds
+};
+
+watch([displayedData, selectedInterval, selectedDay, now, avgPrice], () => nextTick(drawChart));
 
 onMounted(() => {
   fetchData('1h');
-  fetchData('15min'); // Prefetch both for smoothness
+  fetchData('15min');
+  fetchAvg();
+  startPoller();
   
   if (canvasRef.value) {
     resizeObserver = new ResizeObserver(() => drawChart());
@@ -173,18 +242,21 @@ onMounted(() => {
   }
 });
 
-onUnmounted(() => resizeObserver?.disconnect());
+onUnmounted(() => {
+  if (resizeObserver) resizeObserver.disconnect();
+  if (pollInterval) clearInterval(pollInterval);
+});
 </script>
 
 <template>
-  <div class="w-full h-full bg-slate-900/50 rounded-3xl border border-slate-800 border-dashed flex flex-col p-4 relative overflow-hidden group select-none">
+  <div class="w-full h-full bg-slate-900/50 rounded-3xl border border-slate-800 border-dashed flex flex-col p-5 relative overflow-hidden group select-none">
     
-    <div class="flex justify-between items-start mb-3 z-10">
+    <div class="flex justify-between items-center mb-4 z-10">
       
-      <div class="flex bg-slate-800/80 p-0.5 rounded-lg border border-slate-700/50 h-fit">
+      <div class="flex bg-slate-800/80 p-1 rounded-lg border border-slate-700/50 h-fit">
         <button 
           @click="selectedDay = 'today'"
-          class="px-3 py-1 rounded-md text-xs font-bold transition-all duration-200"
+          class="px-4 py-1.5 rounded-md text-base font-bold transition-all duration-200"
           :class="selectedDay === 'today' ? 'bg-slate-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'"
         >
           Today
@@ -192,46 +264,46 @@ onUnmounted(() => resizeObserver?.disconnect());
         <button 
           @click="selectedDay = 'tomorrow'"
           :disabled="!hasTomorrowData"
-          class="px-3 py-1 rounded-md text-xs font-bold transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+          class="px-4 py-1.5 rounded-md text-base font-bold transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
           :class="selectedDay === 'tomorrow' ? 'bg-slate-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'"
         >
           Tmrw
         </button>
       </div>
 
-      <div v-if="currentPrice" class="flex flex-col items-center leading-none -mt-1">
-        <span class="text-[10px] text-slate-500 uppercase font-bold tracking-wider mb-0.5">Current</span>
-        <div class="flex items-baseline space-x-0.5">
+      <div v-if="currentPrice" class="flex items-baseline gap-2">
+        <span class="text-sm text-slate-500 uppercase font-bold tracking-wider">Current</span>
+        
+        <div class="flex items-baseline gap-1">
           <span 
-            class="text-2xl font-black tracking-tight"
+            class="text-4xl font-black tracking-tight"
             :class="getPriceColorClass(currentPrice.price)"
           >
             {{ currentPrice.price.toFixed(1) }}
           </span>
-          <span class="text-[10px] text-slate-500 font-medium">c/kWh</span>
+          <span class="text-sm text-slate-500 font-medium">c/kWh</span>
         </div>
       </div>
-      <div v-else class="flex flex-col items-center leading-none -mt-1 opacity-0">
-         <span class="text-2xl">-</span>
+      <div v-else class="flex items-center opacity-0">
+          <span class="text-4xl">-</span>
       </div>
 
-
-      <div class="flex items-center space-x-2 bg-slate-800/50 px-2 py-1 rounded-lg border border-slate-700/30 h-fit">
+      <div class="flex items-center space-x-2 bg-slate-800/50 px-3 py-1.5 rounded-lg border border-slate-700/30 h-fit">
         <label class="cursor-pointer group">
           <input type="radio" value="1h" v-model="selectedInterval" @change="fetchData('1h')" class="peer hidden">
-          <span class="text-xs font-mono px-2 py-0.5 rounded transition-colors text-slate-500 peer-checked:text-blue-300 peer-checked:bg-slate-700/50">1H</span>
+          <span class="text-base font-mono px-2 py-0.5 rounded transition-colors text-slate-500 peer-checked:text-blue-300 peer-checked:bg-slate-700/50">1H</span>
         </label>
-        <span class="text-slate-700 text-[10px]">|</span>
+        <span class="text-slate-700 text-sm">|</span>
         <label class="cursor-pointer group">
           <input type="radio" value="15min" v-model="selectedInterval" @change="fetchData('15min')" class="peer hidden">
-          <span class="text-xs font-mono px-2 py-0.5 rounded transition-colors text-slate-500 peer-checked:text-blue-300 peer-checked:bg-slate-700/50">15M</span>
+          <span class="text-base font-mono px-2 py-0.5 rounded transition-colors text-slate-500 peer-checked:text-blue-300 peer-checked:bg-slate-700/50">15M</span>
         </label>
       </div>
     </div>
 
-    <div class="flex flex-1 min-h-0 w-full space-x-2">
+    <div class="flex flex-1 min-h-0 w-full gap-3">
       
-      <div class="flex flex-col justify-between items-end text-[10px] text-slate-500 font-mono py-1 w-8 flex-shrink-0">
+      <div class="flex flex-col justify-between items-end text-sm text-slate-500 font-mono py-1 w-10 flex-shrink-0">
         <span>{{ Math.round(globalMaxPrice) }}</span>
         <span>{{ Math.round(globalMaxPrice * 0.75) }}</span>
         <span>{{ Math.round(globalMaxPrice * 0.5) }}</span>
@@ -244,14 +316,14 @@ onUnmounted(() => resizeObserver?.disconnect());
           <canvas ref="canvasRef" class="w-full h-full block"></canvas>
 
           <div v-if="isLoading && displayedData.length === 0" class="absolute inset-0 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm rounded-lg">
-            <span class="text-slate-400 animate-pulse text-xs">Loading...</span>
+            <span class="text-slate-400 animate-pulse text-base">Loading...</span>
           </div>
-          <div v-if="!isLoading && displayedData.length === 0" class="absolute inset-0 flex items-center justify-center text-slate-500 text-xs">
+          <div v-if="!isLoading && displayedData.length === 0" class="absolute inset-0 flex items-center justify-center text-slate-500 text-base">
             No Data
           </div>
         </div>
 
-        <div class="flex justify-between w-full mt-1 text-[10px] text-slate-600 font-mono px-0.5">
+        <div class="flex justify-between w-full mt-2 text-sm text-slate-600 font-mono px-0.5">
           <span>00</span>
           <span>06</span>
           <span>12</span>
