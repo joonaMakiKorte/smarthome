@@ -7,17 +7,17 @@ import electricityService from '../services/electricityService';
 type Interval = '15min' | '1h'
 type ViewDay = 'today' | 'tomorrow'
 
-// Colors for electricity price chart
+// Colors
 const COLORS = {
-  low: '#84cc16',    // Lime-500 (Cheap)
-  medium: '#eab308', // Yellow-500 (Moderate)
+  low: '#84cc16',    // Lime-500
+  medium: '#eab308', // Yellow-500
   high: '#f97316',   // Orange-500
-  avgLine: '#22d3ee' // Cyan-400 (For the horizontal avg line)
+  avgLine: '#22d3ee' // Cyan-400
 };
 
 // State
 const cache = ref<{ [key in Interval]?: ElectricityPriceInterval[] }>({});
-const avgPrice = ref<number | null>(null); // Storing just the price value
+const avgPrice = ref<number | null>(null);
 const selectedInterval = ref<Interval>('15min');
 const selectedDay = ref<ViewDay>('today');
 const isLoading = ref(false);
@@ -29,9 +29,7 @@ let pollInterval: ReturnType<typeof setInterval> | null = null;
 
 // --- Data Fetching ---
 
-// Fetch ALL valid data (Today + Tomorrow)
 const fetchData = async (interval: Interval, force: boolean = false) => {
-  // Check cache for data (if not forced update)
   if (!force && cache.value[interval]) return;
   try {
     isLoading.value = true;
@@ -44,21 +42,20 @@ const fetchData = async (interval: Interval, force: boolean = false) => {
   }
 };
 
-// Fetch 10-day avg price
 const fetchAvg = async () => {
   try {
-    const data = await electricityService.getElectricityAvg();
+    const data: AvgElectricityPrice = await electricityService.getElectricityAvg();
     if (data && typeof data.average_price === 'number') {
       avgPrice.value = data.average_price;
     }
   } catch (err) {
-    console.error("Fetch failed", err);
+    console.error("Avg fetch failed", err);
   }
 }
 
 // --- Chart Helpers ---
 
-// Data for the currently selected day
+// 1. Get the data for the specific day currently selected
 const displayedData = computed(() => {
   const allData = cache.value[selectedInterval.value] || [];
   if (!allData.length) return [];
@@ -72,11 +69,24 @@ const displayedData = computed(() => {
   return allData.filter(d => new Date(d.time).toLocaleDateString() === targetDateStr);
 });
 
-// Global Max Price 
+// 2. Global Max Price (Based on ALL Cached Data + Avg Price)
+// This ensures the scale doesn't jump when switching between Today/Tomorrow
 const globalMaxPrice = computed(() => {
   const allData = cache.value[selectedInterval.value] || [];
-  if (!allData.length) return 10; // Default fallback
-  return Math.max(Math.max(...allData.map(d => d.price)), 5) * 1.1; 
+  const defaults = [10]; // Minimum scale base
+  
+  // Add ALL prices from cache (Today AND Tomorrow if available)
+  if (allData.length) {
+    defaults.push(...allData.map(d => d.price));
+  }
+
+  // Add Avg Price to ensure it fits in the view
+  if (avgPrice.value) {
+    defaults.push(avgPrice.value);
+  }
+
+  // Add 10% padding
+  return Math.max(Math.max(...defaults), 5) * 1.1; 
 });
 
 const hasTomorrowData = computed(() => {
@@ -87,15 +97,12 @@ const hasTomorrowData = computed(() => {
   return allData.some(d => new Date(d.time).toDateString() === tomorrow.toDateString());
 });
 
-// Find Current Price
 const currentPrice = computed(() => {
   const data = cache.value['15min'];
   if (!data || !data.length) return null;
-
-  // Find the interval that covers the current time
   return data.find(d => {
     const t = new Date(d.time);
-    const end = new Date(t.getTime() + 15 * 60000); // +15 mins
+    const end = new Date(t.getTime() + 15 * 60000);
     return now.value >= t && now.value < end;
   });
 });
@@ -105,7 +112,7 @@ const currentPrice = computed(() => {
 const drawChart = () => {
   const canvas = canvasRef.value;
   const data = displayedData.value;
-  if (!canvas || !data.length) return;
+  if (!canvas) return;
 
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
@@ -121,12 +128,14 @@ const drawChart = () => {
 
   ctx.clearRect(0, 0, W, H);
 
+  if (!data.length) return;
+
   // Scaling
   const maxVal = globalMaxPrice.value;
-  const barWidth = (W / data.length); // Full width per slot
-  const gap = data.length > 50 ? 0.5 : 1; // Smaller gap for 15min view
+  const barWidth = (W / data.length);
+  const gap = data.length > 50 ? 0.5 : 1;
   
-  // Bars
+  // 1. Draw Bars
   data.forEach((item, index) => {
     const price = Math.max(0, item.price);
     const barHeight = (price / maxVal) * H;
@@ -141,11 +150,10 @@ const drawChart = () => {
     ctx.fillRect(x, y, Math.max(barWidth - gap, 1), barHeight);
   });
 
-  // Draw Average Price Line
+  // 2. Draw Average Price Line (Horizontal) - No Label
   if (avgPrice.value !== null) {
     const avgY = H - ((avgPrice.value / maxVal) * H);
     
-    // Line
     ctx.beginPath();
     ctx.strokeStyle = COLORS.avgLine;
     ctx.lineWidth = 1;
@@ -153,17 +161,11 @@ const drawChart = () => {
     ctx.moveTo(0, avgY);
     ctx.lineTo(W, avgY);
     ctx.stroke();
-
-    // Label
-    ctx.fillStyle = COLORS.avgLine;
-    ctx.font = 'bold 10px monospace';
-    ctx.fillText(`AVG ${avgPrice.value.toFixed(1)}`, W - 50, avgY - 4);
     
-    // Reset Dash
-    ctx.setLineDash([]);
+    ctx.setLineDash([]); // Reset
   }
 
-  // Current Time Line 
+  // 3. Draw Current Time Line (Vertical)
   if (selectedDay.value === 'today') {
     const currentIndex = data.findIndex(d => {
       const t = new Date(d.time);
@@ -184,7 +186,6 @@ const drawChart = () => {
   }
 };
 
-// Helper for color class
 const getPriceColorClass = (price: number) => {
   if (price < 5) return 'text-lime-400';
   if (price < 10) return 'text-yellow-400';
@@ -194,38 +195,32 @@ const getPriceColorClass = (price: number) => {
 // --- Lifecycle ---
 
 const startPoller = () => {
-  // Run every 60 seconds
   pollInterval = setInterval(() => {
     const current = new Date();
     const prevMinute = now.value.getMinutes();
     
-    // Detect Day Change (00:00)
+    // Day Change
     if (current.getDate() !== now.value.getDate()) {
-      // Clear cache and hard refresh
       cache.value = {}; 
-      selectedDay.value = 'today'; // Reset view to today
+      selectedDay.value = 'today';
       fetchData('1h', true);
       fetchData('15min', true);
-      fetchAvg(); 
+      fetchAvg();
     }
 
-    // Poll average price every 15 minutes
+    // Poll Average Price (Every 15 mins)
     if (current.getMinutes() % 15 === 0 && current.getMinutes() !== prevMinute) {
       fetchAvg();
     }
 
-    // Check for 14:00 Data Release
-    const hour = current.getHours();
-    if (hour >= 14 && !hasTomorrowData.value) {
-      // Silent fetching (retry every minute until data for tomorrow)
+    // 14:00 Data Release Check
+    if (current.getHours() >= 14 && !hasTomorrowData.value) {
       fetchData('1h', true); 
       fetchData('15min', true);
     }
 
-    // Update reactive time
     now.value = current;
-
-  }, 60000); // Run every 60 seconds
+  }, 60000); 
 };
 
 watch([displayedData, selectedInterval, selectedDay, now, avgPrice], () => nextTick(drawChart));
