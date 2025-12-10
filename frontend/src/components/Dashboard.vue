@@ -2,6 +2,7 @@
 import TodoList from './TodoList.vue';
 import Clock from './Clock.vue';
 import HourlyForecast from './HourlyForecast.vue';
+import ElectricityChart from './ElectricityChart.vue';
 </script>
 
 <template>
@@ -27,8 +28,8 @@ import HourlyForecast from './HourlyForecast.vue';
       <TodoList />
     </div>
 
-    <div class="col-start-[10] col-end-[21] row-start-8 row-end-[12] bg-slate-900/50 rounded-3xl border border-slate-800 border-dashed flex items-center justify-center text-slate-500">
-      <span>⚡ Electricity Usage</span>
+    <div class="col-start-[10] col-end-[21] row-start-8 row-end-[12]">
+      <ElectricityChart />
     </div>
 
     <div class="col-start-[21] col-end-[28] row-start-1 row-end-9 bg-slate-900/50 rounded-3xl border border-slate-800 border-dashed flex items-center justify-center text-slate-500">

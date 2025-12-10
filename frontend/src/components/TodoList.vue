@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useIntervalFn } from '@vueuse/core';
 import todoService from '../services/todoService';
 import type { TodoTask, CompletedTask } from '../types';

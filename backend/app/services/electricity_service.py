@@ -72,18 +72,15 @@ def _batch_upsert_and_delete(session: Session, api_data):
 
 def get_electricity_prices(session: Session, mode: Literal["15min", "1h"] = "15min") -> List[ElectricityPriceInterval]:
     """
-    Fetches prices for Today (00:00) through Tomorrow (23:59)
+    Fetches prices starting from NOW - 24 hours (rolling window for timezone compatability)
     Default 15min intervals, aggregate to 1h average if requested.
     """
-    now = datetime.now(tz=timezone.utc)
-    start_of_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
-    end_of_window = start_of_today + timedelta(days=2)
+    buffer_start = datetime.now(tz=timezone.utc) - timedelta(hours=24)
 
     # Query for electricity prices
     statement = (
         select(ElectricityPrice)
-        .where(ElectricityPrice.start_time >= start_of_today)
-        .where(ElectricityPrice.start_time < end_of_window)
+        .where(ElectricityPrice.start_time >= buffer_start)
         .order_by(ElectricityPrice.start_time)
     )
     results = session.exec(statement).all()
