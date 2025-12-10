@@ -17,7 +17,7 @@ async def test_refreshing_electricity_prices(async_client, mock_httpx_client, se
 
     # Helper to format as API expects: "2025-11-26T00:00:00Z"
     def fmt(dt):
-        return dt.replace(microsecond=0).isoformat().replace("+00:00", "Z")
+        return dt.replace(microsecond=0).isoformat().replace("+00:00", ".000Z")
 
     dynamic_price_data = {
         "prices": [

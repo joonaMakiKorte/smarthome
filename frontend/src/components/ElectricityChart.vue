@@ -30,6 +30,7 @@ let pollInterval: ReturnType<typeof setInterval> | null = null;
 // --- Data Fetching ---
 
 const fetchData = async (interval: Interval, force: boolean = false) => {
+  // Return if cache found and is not forced update
   if (!force && cache.value[interval]) return;
   try {
     isLoading.value = true;
@@ -55,7 +56,7 @@ const fetchAvg = async () => {
 
 // --- Chart Helpers ---
 
-// 1. Get the data for the specific day currently selected
+// Get the data for the specific day currently selected
 const displayedData = computed(() => {
   const allData = cache.value[selectedInterval.value] || [];
   if (!allData.length) return [];
@@ -69,13 +70,12 @@ const displayedData = computed(() => {
   return allData.filter(d => new Date(d.time).toLocaleDateString() === targetDateStr);
 });
 
-// 2. Global Max Price (Based on ALL Cached Data + Avg Price)
-// This ensures the scale doesn't jump when switching between Today/Tomorrow
+// Global Max Price
 const globalMaxPrice = computed(() => {
   const allData = cache.value[selectedInterval.value] || [];
   const defaults = [10]; // Minimum scale base
   
-  // Add ALL prices from cache (Today AND Tomorrow if available)
+  // Add ALL prices from cache
   if (allData.length) {
     defaults.push(...allData.map(d => d.price));
   }
@@ -135,7 +135,7 @@ const drawChart = () => {
   const barWidth = (W / data.length);
   const gap = data.length > 50 ? 0.5 : 1;
   
-  // 1. Draw Bars
+  // Draw Bars
   data.forEach((item, index) => {
     const price = Math.max(0, item.price);
     const barHeight = (price / maxVal) * H;
@@ -150,7 +150,7 @@ const drawChart = () => {
     ctx.fillRect(x, y, Math.max(barWidth - gap, 1), barHeight);
   });
 
-  // 2. Draw Average Price Line (Horizontal) - No Label
+  // Draw Average Price Line (Horizontal) 
   if (avgPrice.value !== null) {
     const avgY = H - ((avgPrice.value / maxVal) * H);
     
@@ -165,7 +165,7 @@ const drawChart = () => {
     ctx.setLineDash([]); // Reset
   }
 
-  // 3. Draw Current Time Line (Vertical)
+  // Draw Current Time Line (Vertical)
   if (selectedDay.value === 'today') {
     const currentIndex = data.findIndex(d => {
       const t = new Date(d.time);

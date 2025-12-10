@@ -69,7 +69,6 @@ def _batch_upsert_and_delete(session: Session, api_data):
         print(f"Database error during electricity update: {e}")
         raise e 
 
-
 def get_electricity_prices(session: Session, mode: Literal["15min", "1h"] = "15min") -> List[ElectricityPriceInterval]:
     """
     Fetches prices starting from NOW - 24 hours (rolling window for timezone compatability)
@@ -88,7 +87,7 @@ def get_electricity_prices(session: Session, mode: Literal["15min", "1h"] = "15m
     # Return results immediately if is 15min mode
     if mode == "15min":
         return [ElectricityPriceInterval(
-            time=p.start_time,
+            time=p.start_time.replace(tzinfo=timezone.utc),
             price=p.price
         ) for p in results
     ]
@@ -110,7 +109,7 @@ def get_electricity_prices(session: Session, mode: Literal["15min", "1h"] = "15m
             avg_price = sum(prices) / len(prices)
 
             hourly_data.append(ElectricityPriceInterval(
-                time=start_time,
+                time=start_time.replace(tzinfo=timezone.utc),
                 price=avg_price
             ))
         return hourly_data
