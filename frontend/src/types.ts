@@ -8,7 +8,7 @@ export interface CompletedTask {
     id: string;
     content: string;
     priority: number;
-    completed_at: string;
+    completed_at: string; // ISO 8601 string (UTC)
 }
 
 
@@ -23,7 +23,7 @@ export interface CurrentWeather {
 }
 
 export interface HourlyWeather {
-    timestamp: string;
+    timestamp: string; // ISO 8601 string (UTC)
     temperature: string;
     icon_code: string;
     icon_url: string;
@@ -31,12 +31,31 @@ export interface HourlyWeather {
 
 
 export interface ElectricityPriceInterval {
-    time: string;
+    time: string; // ISO 8601 string (UTC)
     price: number;
 }
 
 export interface AvgElectricityPrice {
-    start_window: string;
-    end_window: string;
+    start_window: string; // ISO 8601 string (UTC)
+    end_window: string; // ISO 8601 string (UTC)
     average_price: number;
+}
+
+
+export interface StopWatchlist {
+    gtfs_id: string;
+    custom_name: string;
+    original_name: string | null;
+}
+
+export interface StopTimeEntry {
+    arrival_time: string; // ISO 8601 string (UTC)
+    headsign: string;
+    route: string;
+}
+
+export interface StopTimetable {
+    gtfs_id: string;
+    name: string;
+    timetable: StopTimeEntry[];
 }
