@@ -14,7 +14,7 @@ async def fetch_and_store_electricity_prices(session: Session):
     Handles deletion of electricity data older than 10 days.
     """
     # Check if we already have the latest data
-    should_fetch = await run_in_threadpool(_check_if_fetch_needed, session)
+    should_fetch = await run_in_threadpool(check_if_fetch_needed, session)
     if not should_fetch:
         return
 
@@ -26,7 +26,7 @@ async def fetch_and_store_electricity_prices(session: Session):
     # Write to db
     await run_in_threadpool(_batch_upsert_and_delete, session, data)
 
-def _check_if_fetch_needed(session: Session) -> bool:
+def check_if_fetch_needed(session: Session) -> bool:
     # Get the latest timestamp in db
     statement = select(func.max(ElectricityPrice.start_time))
     latest_ts = session.exec(statement).first()

@@ -117,6 +117,12 @@ const hasTomorrowData = computed(() => {
   return isFullDay(tomorrowData.length, interval);
 });
 
+const isPendingRelease = computed(() => {
+    const h = now.value.getHours();
+    // It's after 14:00, before 16:00, and we still don't have data
+    return h >= 14 && h < 16 && !hasTomorrowData.value;
+});
+
 const currentPrice = computed(() => {
   const data = cache.value['15min'];
   if (!data || !data.length) return null;
@@ -220,6 +226,7 @@ const startPolling = () => {
   pollInterval = setInterval(() => {
     const current = new Date();
     const prevMinute = now.value.getMinutes();
+    const hour = current.getHours();
     
     // Day Change
     if (current.getDate() !== now.value.getDate()) {
@@ -235,8 +242,8 @@ const startPolling = () => {
       fetchAvg();
     }
 
-    // 14:00 Data Release Check
-    if (current.getHours() >= 14 && !hasTomorrowData.value) {
+    // Check for new data during 14:00-16:00
+    if (hour >= 14 && hour < 16 && !hasTomorrowData.value && !isLoading.value) {
       fetchData('1h', true); 
       fetchData('15min', true);
     }
@@ -273,18 +280,23 @@ onUnmounted(() => {
       <div class="flex bg-slate-800/80 p-1 rounded-lg border border-slate-700/50 h-fit">
         <button 
           @click="selectedDay = 'today'"
-          class="px-4 py-1.5 rounded-md text-base font-bold transition-all duration-200"
+          class="w-28 py-1.5 rounded-md text-base font-bold transition-all duration-200 flex justify-center"
           :class="selectedDay === 'today' ? 'bg-slate-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'"
         >
           Today
         </button>
+        
         <button 
           @click="selectedDay = 'tomorrow'"
           :disabled="!hasTomorrowData"
-          class="px-4 py-1.5 rounded-md text-base font-bold transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed"
+          class="w-28 py-1.5 rounded-md text-base font-bold transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
           :class="selectedDay === 'tomorrow' ? 'bg-slate-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'"
         >
-          Tmrw
+          <span v-if="isPendingRelease" class="relative flex h-2 w-2">
+            <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
+            <span class="relative inline-flex rounded-full h-2 w-2 bg-yellow-500"></span>
+          </span>
+          {{ isPendingRelease ? 'Pending...' : 'Tomorrow' }}
         </button>
       </div>
 
