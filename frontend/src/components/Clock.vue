@@ -53,6 +53,11 @@ onMounted(() => {
     <div class="w-[65%] flex items-center gap-4 border-r border-slate-800/50 pr-4 h-full">
       
       <div v-if="currentWeather" class="flex items-center gap-4">
+
+        <div v-if="isLoading" class="absolute inset-0 flex items-center justify-center bg-slate-900/50 z-10">
+          <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        </div>
+
         <img 
           :src="currentWeather.icon_url" 
           :alt="currentWeather.description"

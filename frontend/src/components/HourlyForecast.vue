@@ -31,7 +31,7 @@ const fetchForecast = async() => {
 // --- Lifecycle ---
 
 // Hourly polling
-const startPolling = (runImmediately: boolean = true) => {
+const startPolling = () => {
   // Clear any existing timers
   if (timeoutId.value) clearTimeout(timeoutId.value);
   if (intervalId.value) clearInterval(intervalId.value);

@@ -216,7 +216,7 @@ const getPriceColorClass = (price: number) => {
 
 // --- Lifecycle ---
 
-const startPoller = () => {
+const startPolling = () => {
   pollInterval = setInterval(() => {
     const current = new Date();
     const prevMinute = now.value.getMinutes();
@@ -251,7 +251,7 @@ onMounted(() => {
   fetchData('1h');
   fetchData('15min');
   fetchAvg();
-  startPoller();
+  startPolling();
   
   if (canvasRef.value) {
     resizeObserver = new ResizeObserver(() => drawChart());
