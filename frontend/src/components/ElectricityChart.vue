@@ -91,15 +91,18 @@ const globalMaxPrice = computed(() => {
 
   // Filter out any data points from yesterday or before
   const todayDate = new Date(now.value)
+  todayDate.setHours(0, 0, 0, 0);
   const relevantData = allData.filter(d => new Date(d.time) >= todayDate);
-
   if (relevantData.length) {
     defaults.push(...relevantData.map(d => d.price));
   }
   if (avgPrice.value) {
     defaults.push(avgPrice.value);
   }
-  return Math.max(Math.max(...defaults), 5) * 1.1;
+  const rawMax = Math.max(...defaults);
+
+  const paddedMax = Math.ceil(rawMax * 1.1);
+  return Math.ceil(paddedMax / 4) * 4;
 });
 
 const hasTomorrowData = computed(() => {
@@ -332,12 +335,18 @@ onUnmounted(() => {
 
     <div class="flex flex-1 min-h-0 w-full gap-3">
       
-      <div class="flex flex-col justify-between items-end text-sm text-slate-500 font-mono py-1 w-10 flex-shrink-0">
-        <span>{{ Math.round(globalMaxPrice) }}</span>
-        <span>{{ Math.round(globalMaxPrice * 0.75) }}</span>
-        <span>{{ Math.round(globalMaxPrice * 0.5) }}</span>
-        <span>{{ Math.round(globalMaxPrice * 0.25) }}</span>
-        <span>0</span>
+      <div class="flex flex-col h-full flex-shrink-0 text-right pr-2 text-sm text-slate-500 font-mono">
+        <div class="relative flex-1">
+          <div class="absolute -top-2.5 -bottom-2.5 left-0 right-0 flex flex-col justify-between">
+            <span>{{ globalMaxPrice }}</span>
+            <span>{{ globalMaxPrice * 0.75 }}</span>
+            <span>{{ globalMaxPrice * 0.5 }}</span>
+            <span>{{ globalMaxPrice * 0.25 }}</span>
+            <span>0</span>
+          </div>
+        </div>
+
+        <div class="mt-2 opacity-0 select-none">00</div>
       </div>
 
       <div class="flex flex-col flex-1 min-w-0 relative">

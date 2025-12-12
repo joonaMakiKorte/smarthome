@@ -6,9 +6,7 @@ import type { HourlyWeather } from '../types';
 // State 
 const forecast = ref<HourlyWeather[]>([]);
 const isLoading = ref(false);
-
-const intervalId = ref<ReturnType<typeof setInterval> | null>(null);
-const timeoutId = ref<ReturnType<typeof setInterval> | null>(null);
+const timerId = ref<ReturnType<typeof setTimeout> | null>(null);
 
 const scrollContainer = ref<HTMLElement | null>(null);
 let isDown = false;
@@ -18,46 +16,74 @@ let scrollLeft = 0;
 
 // --- Data Fetching ---
 
-// Fetch HOURLY forecast (polled)
+// Fetch HOURLY forecast (scheduled)
 const fetchForecast = async() => {
   try {
     const hourlyForecast = await openweatherService.getHourlyWeather();
-    forecast.value = hourlyForecast;
+
+    // Check if the api returned fresh data
+    const now = new Date();
+    now.setMinutes(0, 0, 0);
+    const currentHour = now.getHours();
+    const firstSlotDate = new Date(hourlyForecast[0].timestamp);
+    const firstSlotHour = firstSlotDate.getHours();
+
+    const isMidnight = currentHour === 0 && firstSlotHour === 23 // Consider edge case (midnight)
+    const isStale = firstSlotHour < currentHour && !isMidnight;
+
+    if (isStale) {
+      const currentHourTimestamp = now.getTime();
+        // Filter out old timestamps if stale
+        const cleanForecast = hourlyForecast.filter(item => {
+        const itemTime = new Date(item.timestamp).getTime();
+        return itemTime >= currentHourTimestamp;
+      });
+      forecast.value = cleanForecast;
+      scheduleNextFetch(true); // Schedule as 'retry'
+    } else {
+      forecast.value = hourlyForecast;
+      scheduleNextFetch(false);
+    }
   } catch (err) {
     console.log("Polling failed", err);
+    scheduleNextFetch(true); // Schedule fetch
   }
+};
+
+// --- Helpers ---
+
+// Schedule NEXT FETCH
+const scheduleNextFetch = (isRetry: boolean) => {
+  if (timerId.value) clearTimeout(timerId.value);
+
+  if (isRetry) {
+    timerId.value = setTimeout(fetchForecast, 60000); // Scheduled to next minute
+    return;
+  }
+
+  // Set next fetch to next hour
+  const now = new Date();
+  const nextTarget = new Date(now);
+  nextTarget.setHours(now.getHours() + 1);
+
+  // Push schedule to next hour if already over buffer
+  if (nextTarget.getTime() <= now.getTime()) {
+     nextTarget.setHours(nextTarget.getHours() + 1);
+  }
+
+  const msUntilTarget = nextTarget.getTime() - now.getTime();
+  timerId.value = setTimeout(fetchForecast, msUntilTarget);
 };
 
 // --- Lifecycle ---
 
-// Hourly polling
-const startPolling = () => {
-  // Clear any existing timers
-  if (timeoutId.value) clearTimeout(timeoutId.value);
-  if (intervalId.value) clearInterval(intervalId.value);
-
-  // Calculate time until next hour
-  const now = new Date();
-  const nextHour = new Date(now);
-  nextHour.setHours(now.getHours() + 1, 0, 0, 0);
-  const msUntilNextHour = nextHour.getTime() - now.getTime();
-
-  // Set initial timeout
-  timeoutId.value = setTimeout(() => {
-    fetchForecast();
-    intervalId.value = setInterval(fetchForecast, 3600000); // Regular 1-hour interval
-  }, msUntilNextHour);
-};
-
 onMounted(() => {
   isLoading.value = true;
   fetchForecast().finally(() => isLoading.value = false);
-  startPolling();
 });
 
 onUnmounted(() => {
-  if (timeoutId.value) clearTimeout(timeoutId.value);
-  if (intervalId.value) clearInterval(intervalId.value);
+  if (timerId.value) clearTimeout(timerId.value);
 });
 
 // --- UI Helpers ---
