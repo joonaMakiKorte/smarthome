@@ -43,10 +43,20 @@ class HourlyCache:
     def update(self, new_data: List[HourlyWeather]):
         """Updates the cache and sets expiry to the top of the next hour"""
         now = datetime.now(timezone.utc)
-        next_hour = now.replace(minute=0, second=0, microsecond=0) + timedelta(hours=1)
+        current_hour_floor = now.replace(minute=0, second=0, microsecond=0)
+        
+        # Default expirity is an hour
+        new_expiry = current_hour_floor + timedelta(hours=1)
+
+        # Check for stale data
+        if new_data:
+            first_slot_time = new_data[0].timestamp
+            if first_slot_time < current_hour_floor:
+                # Data is stale -> cache for 1 min (will be called in one min again)
+                new_expiry = now + timedelta(minutes=1)
         
         self.data = new_data
-        self.expiry = next_hour
+        self.expiry = new_expiry
 
 # Init global cache instance
 hourly_cache = HourlyCache()

@@ -68,8 +68,6 @@ def prune_stock_history(session: Session = Depends(get_session)):
     """Prune history older than 48 hours."""
     cutoff = datetime.now(ZoneInfo("America/New_York")) - timedelta(days=2)
     statement = delete(StockPriceEntry).where(StockPriceEntry.timestamp < cutoff)
-    
-    # Run the deletion
     result = session.exec(statement)
     session.commit()
     print(f"Pruned {result.rowcount} old history entries.")

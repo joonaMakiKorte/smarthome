@@ -64,7 +64,7 @@ const scheduleNextFetch = (isRetry: boolean) => {
   // Set next fetch to next hour
   const now = new Date();
   const nextTarget = new Date(now);
-  nextTarget.setHours(now.getHours() + 1);
+  nextTarget.setHours(now.getHours() + 1, 0, 0, 0);
 
   // Push schedule to next hour if already over buffer
   if (nextTarget.getTime() <= now.getTime()) {

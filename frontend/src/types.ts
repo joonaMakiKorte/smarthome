@@ -59,3 +59,33 @@ export interface StopTimetable {
     name: string;
     timetable: StopTimeEntry[];
 }
+
+
+export interface Stock {
+    symbol: string;
+    name: string | null;
+}
+
+export interface StockQuote {
+    symbol: string;
+    name: string;
+    close: number;
+    change: number;
+    percent_change: number;
+    high: number;
+    low: number;
+    volume: number;
+    timestamp: string; // ISO 8601 string (UTC)
+}
+
+export interface StockPriceEntry {
+    symbol: string;
+    interval: string;
+    timestamp: string; // ISO 8601 string (UTC)
+    price: number;
+}
+
+export interface StockHistoryData {
+    symbol: string;
+    history: StockPriceEntry[];
+}
