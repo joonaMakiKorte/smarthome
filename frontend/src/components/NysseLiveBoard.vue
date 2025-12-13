@@ -12,6 +12,11 @@ const isLoading = ref(false);
 
 const now = useNow({ interval: 1000 }); // Reactive time updating every second
 
+const scrollContainer = ref<HTMLElement | null>(null);
+let isDown = false;
+let startY = 0;
+let scrollTop = 0;
+
 // --- Data Fetching ---
 
 const fetchWatchlist = async() => {
@@ -83,6 +88,34 @@ const selectStop = (id: string) => {
   selectedStopId.value = id;
 };
 
+// --- UI Helpers ---
+
+const onMouseDown = (e: MouseEvent) => {
+  if (!scrollContainer.value) return;
+  isDown = true;
+  scrollContainer.value.classList.add('active');
+  startY = e.pageY - scrollContainer.value.offsetTop;
+  scrollTop = scrollContainer.value.scrollTop;
+};
+
+const onMouseLeave = () => {
+  isDown = false;
+  scrollContainer.value?.classList.remove('active');
+};
+
+const onMouseUp = () => {
+  isDown = false;
+  scrollContainer.value?.classList.remove('active');
+};
+
+const onMouseMove = (e: MouseEvent) => {
+  if (!isDown || !scrollContainer.value) return;
+  e.preventDefault();
+  const y = e.pageY - scrollContainer.value.offsetTop;
+  const walk = (y - startY) * 2; 
+  scrollContainer.value.scrollTop = scrollTop - walk;
+};
+
 // --- Lifecycle ---
 
 // Poll LIVEBOARD every minute
@@ -128,13 +161,20 @@ onMounted(() => {
       </h2>
     </div>
 
-    <div class="flex-1 overflow-y-auto p-0 pb-2 scrollbar-hide relative">
+    <div 
+      ref="scrollContainer"
+      @mousedown="onMouseDown"
+      @mouseleave="onMouseLeave"
+      @mouseup="onMouseUp"
+      @mousemove="onMouseMove"
+      class="flex-1 overflow-y-auto p-0 pb-2 scrollbar-hide relative cursor-grab active:cursor-grabbing"
+    >
       
       <div v-if="currentTimetable.length > 0" class="flex flex-col">
         <div 
           v-for="(entry, index) in currentTimetable.slice(0, 10)" 
           :key="index"
-          class="grid grid-cols-[45px_1fr_60px] items-center gap-x-2 px-5 py-2.5 border-b border-white/10 text-lg"
+          class="grid grid-cols-[45px_1fr_60px] items-center gap-x-2 px-5 py-2.5 border-b border-white/10 text-lg select-none"
         >
           <div class="font-extrabold text-left">{{ entry.route }}</div>
           <div class="truncate font-medium pr-2">{{ entry.headsign }}</div>
