@@ -229,7 +229,6 @@ const startPolling = () => {
   pollInterval = setInterval(() => {
     const current = new Date();
     const prevMinute = now.value.getMinutes();
-    const hour = current.getHours();
     
     // Day Change
     if (current.getDate() !== now.value.getDate()) {
@@ -245,8 +244,10 @@ const startPolling = () => {
       fetchAvg();
     }
 
-    // Check for new data during 14:00-16:00
-    if (hour >= 14 && hour < 16 && !hasTomorrowData.value && !isLoading.value) {
+    // Check for new data during 14:02-16:00
+    const pollStart = new Date();
+    pollStart.setHours(14, 2, 0, 0);
+    if (current >= pollStart && current.getHours() < 16 && !hasTomorrowData.value && !isLoading.value) {
       fetchData('1h', true); 
       fetchData('15min', true);
     }

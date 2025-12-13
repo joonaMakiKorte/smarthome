@@ -17,63 +17,82 @@ let scrollLeft = 0;
 // --- Data Fetching ---
 
 // Fetch HOURLY forecast (scheduled)
-const fetchForecast = async() => {
+const fetchForecast = async () => {
   try {
     const hourlyForecast = await openweatherService.getHourlyWeather();
 
-    // Check if the api returned fresh data
+    // Filter out any old entries
     const now = new Date();
-    now.setMinutes(0, 0, 0);
-    const currentHour = now.getHours();
-    const firstSlotDate = new Date(hourlyForecast[0].timestamp);
-    const firstSlotHour = firstSlotDate.getHours();
+    const currentHourTimestamp = now.setMinutes(0, 0, 0);
+    const cleanForecast = hourlyForecast.filter(item => {
+      return new Date(item.timestamp).getTime() >= currentHourTimestamp;
+    });
 
-    const isMidnight = currentHour === 0 && firstSlotHour === 23 // Consider edge case (midnight)
-    const isStale = firstSlotHour < currentHour && !isMidnight;
+    forecast.value = cleanForecast; // Update UI immediately
 
+    // Stale check -> ping api until data is fresh, meaning no filtering
+    const isStale = hourlyForecast.length !== cleanForecast.length;
     if (isStale) {
-      const currentHourTimestamp = now.getTime();
-        // Filter out old timestamps if stale
-        const cleanForecast = hourlyForecast.filter(item => {
-        const itemTime = new Date(item.timestamp).getTime();
-        return itemTime >= currentHourTimestamp;
-      });
-      forecast.value = cleanForecast;
-      scheduleNextFetch(true); // Schedule as 'retry'
+      scheduleRetry();
     } else {
-      forecast.value = hourlyForecast;
-      scheduleNextFetch(false);
+      scheduleNextHourTick();
     }
+
+    scheduleNextHourTick();
+
   } catch (err) {
-    console.log("Polling failed", err);
-    scheduleNextFetch(true); // Schedule fetch
+    console.error("Polling failed", err);
+    scheduleRetry(); // Schedule retry in 1 min
   }
 };
 
 // --- Helpers ---
 
-// Schedule NEXT FETCH
-const scheduleNextFetch = (isRetry: boolean) => {
-  if (timerId.value) clearTimeout(timerId.value);
-
-  if (isRetry) {
-    timerId.value = setTimeout(fetchForecast, 60000); // Scheduled to next minute
-    return;
+// Updates forecast to match current hour and schedule API call
+const handleHourChange = () => {
+  // Filter out any old entries
+  if (forecast.value.length > 0) {
+    const now = new Date();
+    const currentHourTimestamp = now.setMinutes(0, 0, 0);
+    forecast.value = forecast.value.filter(item => {
+      return new Date(item.timestamp).getTime() >= currentHourTimestamp;
+    });
   }
 
-  // Set next fetch to next hour
+  // Fetch in one minute
+  if (timerId.value) clearTimeout(timerId.value);
+  timerId.value = setTimeout(() => {
+    fetchForecast();
+  }, 60000); 
+};
+
+// Schedule handleHourChange function exetution to next hour tick
+const scheduleNextHourTick = () => {
+  if (timerId.value) clearTimeout(timerId.value);
+
   const now = new Date();
   const nextTarget = new Date(now);
+  
+  // Set target to next hour: XX:00:00
   nextTarget.setHours(now.getHours() + 1, 0, 0, 0);
 
-  // Push schedule to next hour if already over buffer
+  // Safety check -> jump to next hour
   if (nextTarget.getTime() <= now.getTime()) {
-     nextTarget.setHours(nextTarget.getHours() + 1);
+      nextTarget.setHours(nextTarget.getHours() + 1);
   }
 
   const msUntilTarget = nextTarget.getTime() - now.getTime();
-  timerId.value = setTimeout(fetchForecast, msUntilTarget);
+  timerId.value = setTimeout(handleHourChange, msUntilTarget);
 };
+
+// Simple retry helper
+const scheduleRetry = () => {
+  if (timerId.value) clearTimeout(timerId.value);
+  timerId.value = setTimeout(() => {
+    fetchForecast();
+  }, 60000); // 1 min timeout
+};
+
 
 // --- Lifecycle ---
 
