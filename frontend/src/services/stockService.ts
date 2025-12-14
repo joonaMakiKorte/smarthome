@@ -27,24 +27,20 @@ export default {
   },
 
   // GET /stocks/quotes
-  async getStockQuotes(stocks: Stock[]): Promise<StockQuote[]> {
-    // Extract symbols
-    const symbolsString = stocks.map(s => s.symbol).join(',');
-
+  async getStockQuotes(symbols: string): Promise<StockQuote[]> {
     const response = await apiClient.get<StockQuote[]>('/stocks/quotes', {
     params: {
-      symbols: symbolsString
+      symbols: symbols
     }
     });
     return response.data;
   },
 
   // GET /stocks/history
-  async getStockHistory(stocks: Stock[], interval: string): Promise<StockHistoryData[]> {
-    const symbolsString = stocks.map(s => s.symbol).join(',');
+  async getStockHistory(symbols: string, interval: string): Promise<StockHistoryData[]> {
     const response = await apiClient.get<StockHistoryData[]>('/stocks/history', {
     params: {
-      symbols: symbolsString,
+      symbols: symbols,
       interval: interval
     }
     });
