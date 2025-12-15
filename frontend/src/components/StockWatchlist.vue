@@ -245,15 +245,10 @@ onMounted(async () => {
   await fetchWatchlist();
   
   // Initial Fetch on Mount
-  await fetchQuotes().finally(() => isLoading.value = false);
-  
-  // Fetch history with delay
-  // If we are at deadzone window, introduce a 5-min delay, else 1-min
-  const delayMs = isDeadZone() ? 300000 : 60000;
-  setTimeout(async () => {
-    await fetchHistory();
-    startPolling(); 
-  }, delayMs); 
+  await fetchQuotes();
+  await fetchHistory().finally(() => isLoading.value = false);
+
+  startPolling();
 });
 
 onUnmounted(() => {

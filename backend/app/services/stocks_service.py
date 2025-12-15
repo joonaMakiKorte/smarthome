@@ -372,6 +372,5 @@ def prune_db_history(session: Session):
     try:
         result = session.exec(statement)
         session.commit()
-        print(f"Pruned {result.rowcount} old history entries.")
     except Exception as e:
         raise e
