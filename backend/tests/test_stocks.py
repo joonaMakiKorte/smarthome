@@ -115,8 +115,6 @@ async def test_get_stock_quotes(async_client, mock_httpx_client, mocker):
         response_data=RAW_QUOTE_DATA
     )
     mocker.patch("app.services.stocks_service.memory_cache", {})
-    mocker.patch("app.services.stocks_service.token_manager.has_tokens", return_value=True)
-    mocker.patch("app.services.stocks_service.rate_limiter.can_request", return_value=True)
 
     response = await async_client.get("/stocks/quotes?symbols=AAPL")
 
@@ -145,8 +143,6 @@ async def test_get_stock_history(async_client, mock_httpx_client, mocker):
         response_data=RAW_HISTORY_DATA
     )
     mocker.patch("app.services.stocks_service.memory_cache", {})
-    mocker.patch("app.services.stocks_service.token_manager.has_tokens", return_value=True)
-    mocker.patch("app.services.stocks_service.rate_limiter.can_request", return_value=True)
 
     response = await async_client.get("/stocks/history?symbols=AAPL&interval=1min")
 

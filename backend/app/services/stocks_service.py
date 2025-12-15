@@ -31,56 +31,42 @@ memory_cache = TTLCache(maxsize=CACHE_SIZE, ttl=60)
 
 # --- Helper Managers ---
 
-class RateLimiter:
-    """Enforce 8 tokens/min constraint using a sliding window."""
-    def __init__(self, max_requests: int = 8, window_seconds: int = 60):
-        self.max_requests = max_requests
-        self.window_seconds = window_seconds
-        self.timestamps = deque()
+DAILY_CREDIT_LIMIT = 800 # Max 800 credits per day
+RPM_LIMIT = 8 # Max 8 requests per min
+class APIGuard:
+    """Separates RPM (API constraint) from Credits (Quota constraint)."""
+    def __init__(self):
+        self._credits_used = 0
+        self._request_timestamps = deque()
+        self._reset_daily_quota_if_needed()
 
-    def can_request(self) -> bool:
-        now = datetime.now().timestamp()
-        # Remove timestamps older than the window
-        while self.timestamps and self.timestamps[0] < now - self.window_seconds:
-            self.timestamps.popleft()
-        return len(self.timestamps) < self.max_requests
+    def _reset_daily_quota_if_needed(self):
+        # Reset if the last check was a different day
+        now_day = datetime.now(timezone.utc).date()
+        if not hasattr(self, '_last_reset_date') or self._last_reset_date != now_day:
+            self._credits_used = 0
+            self._last_reset_date = now_day
 
-    def record_request(self, count: int):
-        for _ in range(count):
-            self.timestamps.append(datetime.now().timestamp())
-
-class TokenManager:
-    """Manages API token usage"""
-    def __init__(self, reserve_per_h: int = 16):
-        self._tokens = DAILY_TOKENS
-        self._tokens_per_h = reserve_per_h # Tokens needed per hour when market is open
-
-    def reset_tokens(self):
-        self._tokens = DAILY_TOKENS
-
-    def consume(self, amount: int = 1):
-        self._tokens -= amount
-
-    def has_tokens(self) -> bool:
-        """Check if there are tokens left in budget after reserving for auto-updates"""
-        reserved = 0
-        now = datetime.now(TZ_NY)
-        if self._is_market_open():
-            reserved += (MARKET_CLOSE.hour - now.hour) * self._tokens_per_h
-        elif now.weekday() <= 4 and now.time() <= MARKET_OPEN:
-            # Market will open today
-            reserved += (MARKET_CLOSE.hour - MARKET_OPEN.hour) * self._tokens_per_h
+    def can_proceed(self, symbol_count: int) -> bool:
+        self._reset_daily_quota_if_needed()
         
-        return (self._tokens - reserved) > 0
+        # Check daily limit
+        if self._credits_used + symbol_count > DAILY_CREDIT_LIMIT:
+            return False
 
-    def _is_market_open(self) -> bool:
-        """Check if US market is currently open (MON-FRI, 9:30-16:00 ET)"""
-        now = datetime.now(TZ_NY)
-        return now.weekday() <= 4 and (MARKET_OPEN <= now.time() <= MARKET_CLOSE)
-    
-# Init Global Managers
-token_manager = TokenManager()
-rate_limiter = RateLimiter()
+        # Check Rate Limit (RPM)
+        now = datetime.now().timestamp()
+        while self._request_timestamps and self._request_timestamps[0] < now - 60:
+            self._request_timestamps.popleft()
+            
+        return len(self._request_timestamps) < RPM_LIMIT
+
+    def record_usage(self, symbol_count: int):
+        self._credits_used += symbol_count
+        self._request_timestamps.append(datetime.now().timestamp())
+
+# Global singleton
+api_guard = APIGuard()
 
 
 # --- Market window helpers ---
@@ -284,12 +270,11 @@ async def get_smart_stock_quote(symbols: str, session: Session) -> List[StockQuo
             symbols_to_fetch.append(sym)
 
     if symbols_to_fetch:
-        # Check ratelimits
-        if token_manager.has_tokens() and rate_limiter.can_request():
+        if api_guard.can_proceed(len(symbols_to_fetch)):
             api_data = await _fetch_realtime_market_data(symbols_to_fetch)
     
-            rate_limiter.record_request(len(symbols_to_fetch))
-            token_manager.consume(len(symbols_to_fetch))
+            # Record usage
+            api_guard.record_usage(len(symbols_to_fetch))
 
             for quote in api_data:
                 results[quote.symbol] = quote
@@ -368,10 +353,13 @@ async def get_smart_stock_history(symbols: str, interval: str, session: Session)
                 memory_cache[cache_key] = entry
 
     if symbols_to_fetch:
-        if token_manager.has_tokens() and rate_limiter.can_request():
+        if api_guard.can_proceed(len(symbols_to_fetch)):
             api_results = await _fetch_stock_history(symbols_to_fetch, start_dt, end_dt, interval)
+
             for stock_data in api_results:               
                 history_map[stock_data.symbol] = stock_data.history
+
+            api_guard.record_usage(len(symbols_to_fetch))
 
             await run_in_threadpool(_bulk_save_history, session, api_results, interval)
 
