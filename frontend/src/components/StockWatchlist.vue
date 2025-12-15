@@ -226,11 +226,14 @@ const startPolling = () => {
   
   // Sync to next minute
   const msToNextMinute = 60000 - (new Date().getTime() % 60000);
+
+  // Add small jitter
+  const jitter = Math.floor(Math.random() * 5000);
   
   setTimeout(() => {
     runScheduler();
     schedulerTimer = setInterval(runScheduler, 60000);
-  }, msToNextMinute);
+  }, msToNextMinute + jitter);
 };
 
 onMounted(async () => {
