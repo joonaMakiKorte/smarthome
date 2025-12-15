@@ -4,6 +4,7 @@ import Clock from './Clock.vue';
 import HourlyForecast from './HourlyForecast.vue';
 import ElectricityChart from './ElectricityChart.vue';
 import NysseLiveBoard from './NysseLiveBoard.vue';
+import StockWatchlist from './StockWatchlist.vue';
 </script>
 
 <template>
@@ -37,8 +38,8 @@ import NysseLiveBoard from './NysseLiveBoard.vue';
       <NysseLiveBoard />
     </div>
 
-    <div class="col-start-[21] col-end-[28] row-start-9 row-end-[16] bg-slate-900/50 rounded-3xl border border-slate-800 border-dashed flex items-center justify-center text-slate-500">
-      <span>📈 Stocks / Portfolio</span>
+    <div class="col-start-[21] col-end-[28] row-start-9 row-end-[16]">
+      <StockWatchlist />
     </div>
 
   </div>
