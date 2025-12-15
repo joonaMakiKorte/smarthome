@@ -1,5 +1,5 @@
 import asyncio
-from app.services import todoist_service, electricity_service
+from app.services import todoist_service, electricity_service, stocks_service
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from zoneinfo import ZoneInfo
@@ -19,6 +19,7 @@ async def start_periodic_services():
 
     # Create and run schedulers
     await _create_electricity_scheduler()
+    await _create_stocks_scheduler()
     scheduler.start()
 
 # --- Todoist ---
@@ -71,5 +72,35 @@ async def _create_electricity_scheduler():
         _electricity_job_wrapper,
         trigger='date',
         id="electricity_startup_fetch",
+        replace_existing=True
+    )
+
+# --- Stocks ---
+
+TZ_NY = ZoneInfo("America/New_York")
+async def _stocks_prune_wrapper():
+    """Wraps the synchronous prune function in a thread to avoid blocking the loop."""
+    with Session(engine) as session:
+        try:
+            # Run the sync function in a threadpool
+            await asyncio.to_thread(stocks_service.prune_db_history, session)
+        except Exception as e:
+            print(f"Error in stocks prune job: {e}")
+
+async def _create_stocks_scheduler():
+    """Prunes stock history at 9:30 NY time daily + at initial launch"""
+    # Daily Recurrent Job (9:30 AM NY)
+    scheduler.add_job(
+        _stocks_prune_wrapper,
+        trigger=CronTrigger(hour=9, minute=30, timezone=TZ_NY),
+        id="stocks_daily_prune",
+        replace_existing=True
+    )
+
+    # Startup Job
+    scheduler.add_job(
+        _stocks_prune_wrapper,
+        trigger='date',
+        id="stocks_startup_prune",
         replace_existing=True
     )

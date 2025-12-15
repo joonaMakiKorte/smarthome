@@ -65,10 +65,6 @@ async def get_historical_data(
     
 @router.delete("/stocks/history/prune")
 def prune_stock_history(session: Session = Depends(get_session)):
-    """Prune history older than 48 hours."""
-    cutoff = datetime.now(ZoneInfo("America/New_York")) - timedelta(days=2)
-    statement = delete(StockPriceEntry).where(StockPriceEntry.timestamp < cutoff)
-    result = session.exec(statement)
-    session.commit()
-    print(f"Pruned {result.rowcount} old history entries.")
+    """Prune history older than 72 hours."""
+    stocks_service.prune_db_history(session)
     return {"status" : "Stock history pruned."}

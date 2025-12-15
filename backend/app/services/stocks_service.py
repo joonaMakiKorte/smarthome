@@ -4,7 +4,7 @@ from fastapi import HTTPException
 from fastapi.concurrency import run_in_threadpool
 from typing import List
 from dotenv import load_dotenv
-from sqlmodel import Session, select
+from sqlmodel import Session, select, delete
 from app.schemas import StockHistoryData
 from app.models import Stock, StockQuote, StockPriceEntry
 from datetime import datetime, time, timedelta, timezone
@@ -365,3 +365,13 @@ async def get_smart_stock_history(symbols: str, interval: str, session: Session)
 
     # Get results
     return [StockHistoryData(symbol=sym, history=history_map[sym]) for sym in symbol_list]
+
+def prune_db_history(session: Session):
+    cutoff = datetime.now(TZ_NY) - timedelta(days=3)
+    statement = delete(StockPriceEntry).where(StockPriceEntry.timestamp < cutoff)
+    try:
+        result = session.exec(statement)
+        session.commit()
+        print(f"Pruned {result.rowcount} old history entries.")
+    except Exception as e:
+        raise e
