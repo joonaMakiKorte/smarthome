@@ -122,12 +122,6 @@ const isMarketOpen = (): boolean => {
 
 // --- UI Helpers ---
 
-const MIN_ROWS = 6;
-const getPlaceholderCount = () => {
-    const currentCount = Object.keys(stockWatchlist.value).length;
-    return Math.max(0, MIN_ROWS - currentCount);
-};
-
 const getQuote = (symbol: string) => {
   return stockQuotes.value[symbol] || { price: 0, change: 0, changePercent: 0 };
 };
@@ -327,15 +321,7 @@ onUnmounted(() => {
             </div>
           </li>
         </ul>
-
-        <div class="flex-1 flex flex-col bg-black">
-             <div 
-               v-for="n in getPlaceholderCount()" 
-               :key="n"
-               class="border-b border-zinc-800 h-[80px] w-full"
-             ></div>
         </div>
-      </div>
     </div>
     
     <div class="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black to-transparent pointer-events-none z-20"></div>
