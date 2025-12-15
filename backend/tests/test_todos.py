@@ -12,7 +12,7 @@ def reset_task_cache():
 
 # pytest tests/test_todos.py::test_read_todos
 @pytest.mark.asyncio
-async def test_read_todos(async_client, mocker):
+async def test_read_todos(async_client):
     """Test fetching current todos by pre-seeding the singleton cache"""
     mock_data = [
         {"id": "1", "content": "Test Task 1", "priority": 3},

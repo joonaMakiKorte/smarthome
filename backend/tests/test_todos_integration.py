@@ -4,7 +4,7 @@ import os
 from todoist_api_python.api_async import TodoistAPIAsync
 from dotenv import load_dotenv
 from app.models import CompletedTask
-
+from app.services.todoist_service import task_cache
 
 load_dotenv()
 
@@ -13,6 +13,13 @@ if not api_key:
     pytest.skip("TODOIST_API_KEY not set in environment variables", allow_module_level=True)
 
 todoist = TodoistAPIAsync(api_key)
+
+@pytest.fixture(autouse=True)
+def reset_task_cache():
+    """Automatically runs before every test to clear the global singleton cache."""
+    task_cache._cache = []
+    task_cache._last_updated = None
+    yield
 
 @pytest_asyncio.fixture(scope="function")
 async def temp_task():
