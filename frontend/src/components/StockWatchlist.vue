@@ -4,7 +4,7 @@ import type { Stock, StockQuote, StockPriceEntry } from '../types';
 import stockService from '../services/stockService';
 
 // Types
-type Interval = '1min' | '15min'
+type Interval = '1min' | '5min'
 
 // State 
 const stockWatchlist = ref<Record<string, Stock>>({});
@@ -68,7 +68,7 @@ const fetchHistory = async(forced: boolean = false) => {
   if (symbols.length === 0) return;
   try {
     let symbolsString = '';
-    let interval: Interval = '15min';
+    let interval: Interval = '5min';
     // If forced, fetch only the selected symbol with 1 min interval
     if (forced && selectedSymbol.value) {
       symbolsString = selectedSymbol.value;
@@ -120,6 +120,14 @@ const isMarketOpen = (): boolean => {
   return currentMins >= MARKET_OPEN_MIN && currentMins < MARKET_CLOSE_MIN + CLOSE_OFFSET;
 };
 
+// Helper to check if we are at polling deadzone -> no data at this window when market open
+const isDeadZone = (now = new Date()) => {
+  const etNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+  const h = etNow.getHours();
+  const m = etNow.getMinutes();
+  return h === 9 && m >= 30 && m < 35;
+};
+
 // --- UI Helpers ---
 
 const getQuote = (symbol: string) => {
@@ -144,7 +152,7 @@ const formatPercentage = (val: number) => {
 
 const getHistoryForSymbol = (symbol: string): StockPriceEntry[] => {
   // Default to 15min interval for list view
-  return stockHistory.value['15min']?.[symbol] || [];
+  return stockHistory.value['5min']?.[symbol] || [];
 };
 
 const generateSparkline = (data: StockPriceEntry[]) => {
@@ -211,7 +219,9 @@ const runScheduler = async () => {
   }
 
   if (minutes % HISTORY_INTERVAL_MIN === HISTORY_OFFSET_MIN) {
-    await fetchHistory();
+    if (!isDeadZone()) {
+      await fetchHistory();
+    }
   }
 };
 
@@ -237,11 +247,13 @@ onMounted(async () => {
   // Initial Fetch on Mount
   await fetchQuotes().finally(() => isLoading.value = false);
   
-  // Fetch history with 1-min delay
+  // Fetch history with delay
+  // If we are at deadzone window, introduce a 5-min delay, else 1-min
+  const delayMs = isDeadZone() ? 300000 : 60000;
   setTimeout(async () => {
     await fetchHistory();
     startPolling(); 
-  }, 60000); 
+  }, delayMs); 
 });
 
 onUnmounted(() => {
