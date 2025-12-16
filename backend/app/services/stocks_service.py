@@ -215,8 +215,8 @@ def _bulk_save_history(session: Session, api_results: List[StockHistoryData], in
             entry.symbol = stock_data.symbol
             entry.interval = interval
             session.merge(entry)
-            cache_key = f"history_{entry.symbol}{interval}"
-            memory_cache[cache_key] = entry
+        cache_key = f"history_{stock_data.symbol}{interval}"
+        memory_cache[cache_key] = stock_data.history
     session.commit()
 
 
@@ -263,9 +263,9 @@ async def get_smart_stock_quote(symbols: str, session: Session) -> List[StockQuo
                 if db_ts_ny.date() >= last_market_close.date():
                     is_valid = True
             else:
-                # Accept quotes newer than 10 minutes
+                # Accept quotes newer than minute
                 age = (datetime.now(timezone.utc) - ts_utc).total_seconds()
-                if age < 600:
+                if age < 60:
                     is_valid = True
 
         if is_valid:
@@ -350,12 +350,11 @@ async def get_smart_stock_history(symbols: str, interval: str, session: Session)
             last_ts_utc = entries[-1].timestamp.replace(tzinfo=timezone.utc)
             last_candle_time = last_ts_utc.astimezone(TZ_NY)
             
-            if (now - last_candle_time).total_seconds() > 3600:
+            if (now - last_candle_time).total_seconds() > 60:
                 symbols_to_fetch.append(sym)
             else:
-                entry = StockHistoryData(symbol=sym, history=entries)
                 cache_key = f"history_{sym}{interval}"
-                memory_cache[cache_key] = entry
+                memory_cache[cache_key] = entries
 
     if symbols_to_fetch:
         if api_guard.can_proceed(len(symbols_to_fetch)):
@@ -375,7 +374,7 @@ def prune_db_history(session: Session):
     cutoff = datetime.now(TZ_NY) - timedelta(days=3)
     statement = delete(StockPriceEntry).where(StockPriceEntry.timestamp < cutoff)
     try:
-        result = session.exec(statement)
+        session.exec(statement)
         session.commit()
     except Exception as e:
         raise e
