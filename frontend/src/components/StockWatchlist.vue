@@ -242,11 +242,27 @@ const startPolling = () => {
 
 onMounted(async () => {
   isLoading.value = true;
+
+  // Initial fetch on mount
   await fetchWatchlist();
-  
-  // Initial Fetch on Mount
   await fetchQuotes();
-  await fetchHistory().finally(() => isLoading.value = false);
+  
+  // Handle History with Dynamic Delay
+  if (isDeadZone()) {
+    // Calculate exact ms remaining until 9:35:05
+    const now = new Date();
+    const etNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
+    const minutesWait = 35 - etNow.getMinutes();
+    const secondsWait = 60 - etNow.getSeconds();
+    const msUntilOpen = ((minutesWait - 1) * 60 * 1000) + (secondsWait * 1000) + 5000;
+   
+    setTimeout(() => {
+      fetchHistory();
+    }, msUntilOpen); 
+  } else {
+    await fetchHistory();
+  }
+  isLoading.value = false;
 
   startPolling();
 });
