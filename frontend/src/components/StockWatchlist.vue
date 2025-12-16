@@ -11,7 +11,8 @@ const stockWatchlist = ref<Record<string, Stock>>({});
 const stockQuotes = ref<Record<string, StockQuote>>({});
 const stockHistory = ref<{ [key in Interval]?: Record<string, StockPriceEntry[]> }>({});
 const selectedSymbol = ref<string | null>(null);
-const isLoading = ref(false);
+const isLoading = ref(false); // Base loader for initial mount
+const isDetailLoading = ref(false); // Specific loader for detailed view
 
 let schedulerTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -25,7 +26,6 @@ let scrollTop = 0;
 const fetchWatchlist = async() => {
   try {
     const watchlist = await stockService.getStockWatchlist();
-    
     const record: Record<string, Stock> = {};
     watchlist.forEach(stock => {
       record[stock.symbol] = stock;
@@ -40,7 +40,6 @@ const fetchWatchlist = async() => {
 const fetchQuotes = async(forced: boolean = false) => {
   let symbols = Object.keys(stockWatchlist.value);
   if (symbols.length === 0) return;
-
   try {
     let symbolsString = '';
     // If forced, fetch only the selected symbol
@@ -51,12 +50,12 @@ const fetchQuotes = async(forced: boolean = false) => {
     }
     const results = await stockService.getStockQuotes(symbolsString);
 
-    // Map quotes to symbols
-    const quotes: Record<string, StockQuote> = {};
+    // Merge new results into existing state
+    const newQuotes = { ...stockQuotes.value };
     for (const quote of results) {
-      quotes[quote.symbol] = quote;
+      newQuotes[quote.symbol] = quote;
     }
-    stockQuotes.value = quotes;
+    stockQuotes.value = newQuotes;
   } catch (err) {
     console.error("Failed to update quotes", err);
   }
@@ -77,11 +76,17 @@ const fetchHistory = async(forced: boolean = false) => {
       symbolsString = symbols.join(',');
     }
     const results = await stockService.getStockHistory(symbolsString, interval);
-    const history: Record<string, StockPriceEntry[]> = {};
-    for (const data of results) {
-      history[data.symbol] = data.history;
+
+    // Initialize interval bucket if missing
+    if (!stockHistory.value[interval]) {
+      stockHistory.value[interval] = {};
     }
-    stockHistory.value[interval] = history;
+
+    const historyBucket = { ...stockHistory.value[interval] };
+    for (const data of results) {
+      historyBucket[data.symbol] = data.history;
+    }
+    stockHistory.value[interval] = historyBucket;
   } catch (err) {
     console.error("Fetching history failed", err);
   }
@@ -89,10 +94,10 @@ const fetchHistory = async(forced: boolean = false) => {
 
 // --- Helpers ---
 
-// Is US Market Open (9:30-17:00 America/NY, real end is 16:00 but we use 1h buffer for safety)
+// Is US Market Open (9:30-16:00 America/NY, real end is 16:00 but we use 30min buffer for safety)
 const MARKET_OPEN_MIN = 9 * 60 + 30; // 9:30
 const MARKET_CLOSE_MIN = 16 * 60; // 16:00
-const CLOSE_OFFSET = 60; // 1h offset
+const CLOSE_OFFSET = 30;
 const isMarketOpen = (): boolean => {
   const now = new Date();
 
@@ -106,16 +111,12 @@ const isMarketOpen = (): boolean => {
   }).formatToParts(now);
 
   // Extract values
-  const getPart = (type: Intl.DateTimeFormatPartTypes) => 
-    nyTime.find(p => p.type === type)?.value;
-
+  const getPart = (type: Intl.DateTimeFormatPartTypes) => nyTime.find(p => p.type === type)?.value;
   const day = getPart('weekday');
   const hour = parseInt(getPart('hour') || '0', 10);
   const minute = parseInt(getPart('minute') || '0', 10);
 
-  // Only open during weekdays
   if (day === 'Sat' || day === 'Sun') return false;
-
   const currentMins = hour * 60 + minute;
   return currentMins >= MARKET_OPEN_MIN && currentMins < MARKET_CLOSE_MIN + CLOSE_OFFSET;
 };
@@ -126,6 +127,22 @@ const isDeadZone = (now = new Date()) => {
   const h = etNow.getHours();
   const m = etNow.getMinutes();
   return h === 9 && m >= 30 && m < 35;
+};
+
+const selectStock = async (symbol: string) => {
+  selectedSymbol.value = symbol;
+  isDetailLoading.value = true;
+
+  // Force fetch high-res data for selected symbol
+  await Promise.all([
+    fetchQuotes(true),
+    fetchHistory(true)
+  ]);
+  isDetailLoading.value = false;
+};
+
+const clearSelection = () => {
+  selectedSymbol.value = null;
 };
 
 // --- UI Helpers ---
@@ -141,36 +158,37 @@ const getQuoteChangeColor = (symbol: string) => {
   return 'bg-slate-700 text-slate-300';
 };
 
-const formatCurrency = (val: number) => {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
+const getTextChangeColor = (symbol: string) => {
+  const change = getQuote(symbol).change;
+  if (change > 0) return 'text-green-500';
+  if (change < 0) return 'text-red-500';
+  return 'text-zinc-400';
 };
+
+const formatCurrency = (val: number) => new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
+const formatNumber = (val: number) => new Intl.NumberFormat('en-US', { notation: "compact", maximumFractionDigits: 1 }).format(val);
 
 const formatPercentage = (val: number) => {
   const sign = val > 0 ? '+' : '';
   return `${sign}${val.toFixed(2)}%`;
 };
 
-const getHistoryForSymbol = (symbol: string): StockPriceEntry[] => {
-  // Default to 15min interval for list view
-  return stockHistory.value['5min']?.[symbol] || [];
+const getHistoryForSymbol = (symbol: string, interval: Interval = '5min'): StockPriceEntry[] => {
+  return stockHistory.value[interval]?.[symbol] || [];
 };
 
-const generateSparkline = (data: StockPriceEntry[]) => {
+const generateChartPath = (data: StockPriceEntry[], width: number, height: number) => {
   if (!data || data.length < 2) return '';
 
-  const prices = data.map(d => d.price); // Handle potential structure diffs
+  const prices = data.map(d => d.price);
   const min = Math.min(...prices);
   const max = Math.max(...prices);
   const range = max - min || 1;
 
-  // SVG Dimension: 60 x 20
-  const width = 60;
-  const height = 20;
-
-  // Generate Points
   const points = prices.map((price, index) => {
     const x = (index / (prices.length - 1)) * width;
     const normalizedPrice = (price - min) / range;
+    // SVG y=0 is top, so we invert
     const y = height - (normalizedPrice * height); 
     return `${x.toFixed(1)} ${y.toFixed(1)}`;
   });
@@ -178,6 +196,14 @@ const generateSparkline = (data: StockPriceEntry[]) => {
   return `M ${points.join(' L ')}`;
 };
 
+const generateAreaPath = (data: StockPriceEntry[], width: number, height: number) => {
+  const linePath = generateChartPath(data, width, height);
+  if (!linePath) return '';
+  // Close the path to create an area (bottom-right -> bottom-left)
+  return `${linePath} L ${width} ${height} L 0 ${height} Z`;
+};
+
+// Drag Scrolling
 const onMouseDown = (e: MouseEvent) => {
   if (!scrollContainer.value) return;
   isDown = true;
@@ -185,17 +211,8 @@ const onMouseDown = (e: MouseEvent) => {
   startY = e.pageY - scrollContainer.value.offsetTop;
   scrollTop = scrollContainer.value.scrollTop;
 };
-
-const onMouseLeave = () => {
-  isDown = false;
-  scrollContainer.value?.classList.remove('active');
-};
-
-const onMouseUp = () => {
-  isDown = false;
-  scrollContainer.value?.classList.remove('active');
-};
-
+const onMouseLeave = () => { isDown = false; scrollContainer.value?.classList.remove('active'); };
+const onMouseUp = () => { isDown = false; scrollContainer.value?.classList.remove('active'); };
 const onMouseMove = (e: MouseEvent) => {
   if (!isDown || !scrollContainer.value) return;
   e.preventDefault();
@@ -206,9 +223,8 @@ const onMouseMove = (e: MouseEvent) => {
 
 // --- Lifecycle ---
 
-const QUOTE_INTERVAL_MIN = 15;
-const HISTORY_INTERVAL_MIN = 30;
-const HISTORY_OFFSET_MIN = 2;
+const QUOTE_INTERVAL_MIN = 10;
+const HISTORY_INTERVAL_MIN = 15;
 const runScheduler = async () => {
   if (!isMarketOpen()) return;
   const now = new Date();
@@ -218,7 +234,7 @@ const runScheduler = async () => {
     await fetchQuotes();
   }
 
-  if (minutes % HISTORY_INTERVAL_MIN === HISTORY_OFFSET_MIN) {
+  if (minutes % HISTORY_INTERVAL_MIN === 0) {
     if (!isDeadZone()) {
       await fetchHistory();
     }
@@ -273,81 +289,189 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="h-full bg-black rounded-3xl border border-zinc-800 flex flex-col overflow-hidden relative select-none shadow-2xl">
+  <div class="h-full bg-black rounded-3xl border border-zinc-800 flex flex-col overflow-hidden relative select-none shadow-2xl transition-all duration-300">
     
-    <div class="px-6 pt-6 pb-3 bg-black z-10 border-b border-zinc-800 flex-shrink-0">
-      <div class="flex justify-between items-end mb-1">
-        <h2 class="text-3xl font-bold text-white tracking-tight">Stocks</h2>
-        <span class="text-[10px] font-bold uppercase tracking-widest mb-1.5 px-2 py-0.5 rounded"
-          :class="isMarketOpen() ? 'text-green-500 bg-green-500/10' : 'text-zinc-500 bg-zinc-800/50'">
-          {{ isMarketOpen() ? 'Market Open' : 'Closed' }}
-        </span>
-      </div>
-      <div class="text-sm text-zinc-400 font-semibold tracking-wide">
-        {{ new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) }}
-      </div>
-    </div>
-
-    <div 
-      ref="scrollContainer"
-      class="flex-1 overflow-y-auto cursor-grab active:cursor-grabbing scrollbar-hide relative flex flex-col bg-black"
-      @mousedown="onMouseDown"
-      @mouseleave="onMouseLeave"
-      @mouseup="onMouseUp"
-      @mousemove="onMouseMove"
-    >
-      <div v-if="isLoading" class="flex items-center justify-center h-full text-zinc-500">
-        <span class="animate-pulse font-medium">Loading market data...</span>
+    <div v-if="selectedSymbol" class="flex flex-col h-full bg-black relative z-20 min-h-0">
+      <div class="px-6 py-3 flex items-center justify-between shrink-0">
+        <button 
+          @click="clearSelection"
+          class="flex items-center justify-center w-8 h-8 -ml-2 rounded-full hover:bg-zinc-800 text-zinc-400 hover:text-white transition-colors"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m15 18-6-6 6-6"/></svg>
+        </button>
+        <span class="text-xs font-bold text-zinc-500 uppercase tracking-widest">{{ stockWatchlist[selectedSymbol]?.name }}</span>
+        <div class="w-8"></div>
       </div>
 
-      <div v-else class="flex flex-col min-h-full">
-        <ul class="divide-y divide-zinc-800">
-          <li 
-            v-for="symbol in Object.keys(stockWatchlist)" 
-            :key="symbol"
-            class="flex items-center justify-between py-4 px-6 hover:bg-zinc-900 transition-colors group"
-          >
-            <div class="w-[28%] flex flex-col">
-              <span class="text-lg font-bold text-white tracking-wide">{{ symbol }}</span>
-              <span class="text-xs text-zinc-500 truncate font-medium tracking-wide">{{ stockWatchlist[symbol].name }}</span>
-            </div>
+      <div v-if="isDetailLoading" class="flex-1 flex items-center justify-center">
+        <span class="animate-pulse text-zinc-500 font-medium">Loading {{ selectedSymbol }}...</span>
+      </div>
 
-            <div class="w-[32%] h-10 flex items-center justify-center px-2">
-              <svg 
-                v-if="getHistoryForSymbol(symbol).length > 1" 
-                viewBox="0 0 60 20" 
-                class="w-full h-full overflow-visible"
-                preserveAspectRatio="none"
-              >
-                <path 
-                  :d="generateSparkline(getHistoryForSymbol(symbol))" 
-                  fill="none" 
-                  stroke-width="2"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  :class="getQuote(symbol).change >= 0 ? 'stroke-[#32D74B]' : 'stroke-[#FF453A]'"
-                />
-              </svg>
-              <div v-else class="w-1/2 h-[2px] bg-zinc-800 rounded animate-pulse"></div>
-            </div>
-
-            <div class="w-[40%] flex flex-col items-end gap-1">
-              <span class="text-xl font-bold text-white tabular-nums tracking-tight">
-                {{ formatCurrency(getQuote(symbol).close) }}
-              </span>
-              <div 
-                class="px-3 py-1 rounded-md text-sm font-bold tabular-nums min-w-[74px] text-center"
-                :class="getQuoteChangeColor(symbol)"
-              >
-                {{ formatPercentage(getQuote(symbol).percent_change) }}
-              </div>
-            </div>
-          </li>
-        </ul>
+      <div v-else class="flex flex-col flex-1 px-6 pb-4 min-h-0">
+        <div class="flex flex-col mb-2 shrink-0">
+          <div class="flex items-baseline gap-3">
+            <h1 class="text-3xl font-bold text-white tracking-tight">{{ selectedSymbol }}</h1>
+            <span class="text-xl font-semibold tracking-tight" :class="getTextChangeColor(selectedSymbol)">
+              {{ formatCurrency(getQuote(selectedSymbol).close) }}
+            </span>
+          </div>
+          <div class="flex items-center gap-2">
+            <span :class="getTextChangeColor(selectedSymbol)" class="text-sm font-medium flex items-center">
+              <span v-if="getQuote(selectedSymbol).change > 0">▲</span>
+              <span v-if="getQuote(selectedSymbol).change < 0">▼</span>
+              {{ Math.abs(getQuote(selectedSymbol).change).toFixed(2) }} 
+              ({{ formatPercentage(getQuote(selectedSymbol).percent_change) }})
+            </span>
+            <span class="text-zinc-600 text-xs font-medium">Today</span>
+          </div>
         </div>
+
+        <div class="flex-1 w-full min-h-0 relative my-2">
+          <svg 
+            v-if="getHistoryForSymbol(selectedSymbol, '1min').length > 1" 
+            viewBox="0 0 300 150" 
+            class="w-full h-full overflow-visible" 
+            preserveAspectRatio="none"
+          >
+            <defs>
+              <linearGradient :id="'grad-detail-' + selectedSymbol" x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" :stop-color="getQuote(selectedSymbol).change >= 0 ? '#22c55e' : '#ef4444'" stop-opacity="0.3"/>
+                <stop offset="100%" :stop-color="getQuote(selectedSymbol).change >= 0 ? '#22c55e' : '#ef4444'" stop-opacity="0"/>
+              </linearGradient>
+            </defs>
+            <path 
+              :d="generateAreaPath(getHistoryForSymbol(selectedSymbol, '1min'), 300, 150)" 
+              :fill="'url(#grad-detail-' + selectedSymbol + ')'" 
+              class="transition-all duration-500 ease-out"
+            />
+            <path 
+              :d="generateChartPath(getHistoryForSymbol(selectedSymbol, '1min'), 300, 150)" 
+              fill="none" 
+              stroke-width="2" 
+              stroke-linecap="round" 
+              stroke-linejoin="round"
+              :class="getQuote(selectedSymbol).change >= 0 ? 'stroke-green-500' : 'stroke-red-500'"
+              class="transition-all duration-500 ease-out"
+            />
+          </svg>
+          <div v-else class="w-full h-full border-2 border-dashed border-zinc-800 rounded-xl flex items-center justify-center text-zinc-600 text-xs">
+            No intraday data
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-3 mt-auto shrink-0">
+          <div class="bg-zinc-900/50 rounded-lg p-2 border border-zinc-800/50 flex flex-col justify-center">
+            <span class="block text-zinc-500 text-[10px] font-bold uppercase">High</span>
+            <span class="block text-white font-mono text-sm font-medium">{{ formatCurrency(getQuote(selectedSymbol).high) }}</span>
+          </div>
+          <div class="bg-zinc-900/50 rounded-lg p-2 border border-zinc-800/50 flex flex-col justify-center">
+            <span class="block text-zinc-500 text-[10px] font-bold uppercase">Low</span>
+            <span class="block text-white font-mono text-sm font-medium">{{ formatCurrency(getQuote(selectedSymbol).low) }}</span>
+          </div>
+          <div class="bg-zinc-900/50 rounded-lg p-2 border border-zinc-800/50 flex flex-col justify-center">
+            <span class="block text-zinc-500 text-[10px] font-bold uppercase">Volume</span>
+            <span class="block text-white font-mono text-sm font-medium">{{ formatNumber(getQuote(selectedSymbol).volume) }}</span>
+          </div>
+          <div class="bg-zinc-900/50 rounded-lg p-2 border border-zinc-800/50 flex flex-col justify-center">
+            <span class="block text-zinc-500 text-[10px] font-bold uppercase">Prev Close</span>
+            <span class="block text-white font-mono text-sm font-medium">
+              {{ formatCurrency(getQuote(selectedSymbol).close - getQuote(selectedSymbol).change) }}
+            </span>
+          </div>
+        </div>
+      </div>
     </div>
-    
-    <div class="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black to-transparent pointer-events-none z-20"></div>
+
+    <div v-else class="flex flex-col h-full relative">
+      <div class="px-6 pt-6 pb-3 bg-black z-10 border-b border-zinc-800 flex-shrink-0">
+        <div class="flex justify-between items-end mb-1">
+          <h2 class="text-3xl font-bold text-white tracking-tight">Stocks</h2>
+          <span class="text-[10px] font-bold uppercase tracking-widest mb-1.5 px-2 py-0.5 rounded"
+            :class="isMarketOpen() ? 'text-green-500 bg-green-500/10' : 'text-zinc-500 bg-zinc-800/50'">
+            {{ isMarketOpen() ? 'Market Open' : 'Closed' }}
+          </span>
+        </div>
+        <div class="text-sm text-zinc-400 font-semibold tracking-wide">
+          {{ new Date().toLocaleDateString('en-US', { month: 'long', day: 'numeric' }) }}
+        </div>
+      </div>
+
+      <div 
+        ref="scrollContainer"
+        class="flex-1 overflow-y-auto cursor-grab active:cursor-grabbing scrollbar-hide relative flex flex-col bg-black"
+        @mousedown="onMouseDown"
+        @mouseleave="onMouseLeave"
+        @mouseup="onMouseUp"
+        @mousemove="onMouseMove"
+      >
+        <div v-if="isLoading" class="flex items-center justify-center h-full text-zinc-500">
+          <span class="animate-pulse font-medium">Loading market data...</span>
+        </div>
+
+        <div v-else class="flex flex-col min-h-full">
+          <ul class="divide-y divide-zinc-800">
+            <li 
+              v-for="symbol in Object.keys(stockWatchlist)" 
+              :key="symbol"
+              @click="selectStock(symbol)"
+              class="flex items-center justify-between py-4 px-6 hover:bg-zinc-900 transition-colors group cursor-pointer"
+            >
+              <div class="w-[28%] flex flex-col">
+                <span class="text-lg font-bold text-white tracking-wide group-hover:text-blue-400 transition-colors">{{ symbol }}</span>
+                <span class="text-xs text-zinc-500 truncate font-medium tracking-wide">{{ stockWatchlist[symbol].name }}</span>
+              </div>
+
+              <div class="w-[32%] h-10 flex items-center justify-center px-2">
+                <svg 
+                  v-if="getHistoryForSymbol(symbol, '5min').length > 1" 
+                  viewBox="0 0 60 20" 
+                  class="w-full h-full overflow-visible"
+                  preserveAspectRatio="none"
+                >
+                   <defs>
+                    <linearGradient :id="'grad-list-' + symbol" x1="0" x2="0" y1="0" y2="1">
+                      <stop offset="0%" :stop-color="getQuote(symbol).change >= 0 ? '#22c55e' : '#ef4444'" stop-opacity="0.3"/>
+                      <stop offset="100%" :stop-color="getQuote(symbol).change >= 0 ? '#22c55e' : '#ef4444'" stop-opacity="0"/>
+                    </linearGradient>
+                  </defs>
+
+                  <path 
+                    :d="generateAreaPath(getHistoryForSymbol(symbol, '5min'), 60, 20)" 
+                    :fill="'url(#grad-list-' + symbol + ')'" 
+                    class="transition-all duration-500 ease-out"
+                  />
+
+                  <path 
+                    :d="generateChartPath(getHistoryForSymbol(symbol, '5min'), 60, 20)" 
+                    fill="none" 
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    :class="getQuote(symbol).change >= 0 ? 'stroke-[#32D74B]' : 'stroke-[#FF453A]'"
+                    class="transition-all duration-500 ease-out"
+                  />
+                </svg>
+                <div v-else class="w-1/2 h-[2px] bg-zinc-800 rounded animate-pulse"></div>
+              </div>
+
+              <div class="w-[40%] flex flex-col items-end gap-1">
+                <span class="text-xl font-bold text-white tabular-nums tracking-tight">
+                  {{ formatCurrency(getQuote(symbol).close) }}
+                </span>
+                <div 
+                  class="px-3 py-1 rounded-md text-sm font-bold tabular-nums min-w-[74px] text-center"
+                  :class="getQuoteChangeColor(symbol)"
+                >
+                  {{ formatPercentage(getQuote(symbol).percent_change) }}
+                </div>
+              </div>
+            </li>
+          </ul>
+        </div>
+      </div>
+      
+      <div class="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black to-transparent pointer-events-none z-20"></div>
+    </div>
   </div>
 </template>
 
