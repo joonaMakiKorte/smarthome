@@ -120,33 +120,21 @@ async def _fetch_realtime_market_data(symbols: List[str]) -> List[StockQuote]:
 
     results = []
 
-    # For a single symbol, returns a dict with 'name' at root
-    if "name" in data:
+    # Normalize input
+    items = [data] if "name" in data else data.values()
+
+    for item in items:
         results.append(StockQuote(
-            symbol = data["symbol"],
-            name = data["name"],
-            close = round(float(data["close"]), 2),
-            change = round(float(data["change"]), 2),
-            percent_change = round(float(data["percent_change"]), 2),
-            high = round(float(data["high"]), 2),
-            low = round(float(data["low"]), 2),
-            volume = int(data["volume"]),
-            timestamp=datetime.fromtimestamp(data["timestamp"],tz=timezone.utc)
+            symbol=item["symbol"],
+            name=item["name"],
+            close=round(float(item["close"]), 2),
+            change=round(float(item["change"]), 2),
+            percent_change=round(float(item["percent_change"]), 2),
+            high=round(float(item["high"]), 2),
+            low=round(float(item["low"]), 2),
+            volume=int(item["volume"]),
+            timestamp=datetime.fromtimestamp(item["timestamp"], tz=timezone.utc)
         ))
-    # Twelve Data returns a dict keyed by symbol for multiple symbols requested
-    else:
-        for symbol, details in data.items():
-            results.append(StockQuote(
-                symbol = symbol,
-                name = details["name"],
-                close = round(float(details["close"]), 2),
-                change = round(float(details["change"]), 2),
-                percent_change = round(float(details["percent_change"]), 2),
-                high = round(float(details["high"]), 2),
-                low = round(float(details["low"]), 2),
-                volume = int(details["volume"]),
-                timestamp=datetime.fromtimestamp(details["timestamp"],tz=timezone.utc)
-            ))
     return results
 
 async def _fetch_stock_history(symbols: List[str], start_dt: datetime, end_dt: datetime, interval: str) -> List[StockHistoryData]:
@@ -263,7 +251,24 @@ async def get_smart_stock_quote(symbols: str, session: Session) -> List[StockQuo
     symbols_to_fetch = [] # Keep track of missing symbols
     for sym in missing_symbols:
         db_data = db_map.get(sym)
-        if db_data and last_market_close and db_data.timestamp.astimezone(TZ_NY) >= last_market_close:
+        is_valid = False
+        if db_data:
+            ts_utc = db_data.timestamp.replace(tzinfo=timezone.utc) # Force UTC awareness
+
+            # Check if DB data is fresh enough
+            if last_market_close:
+                db_ts_ny = ts_utc.astimezone(TZ_NY)
+                
+                # Check if data belongs to the last known market day
+                if db_ts_ny.date() >= last_market_close.date():
+                    is_valid = True
+            else:
+                # Accept quotes newer than 10 minutes
+                age = (datetime.now(timezone.utc) - ts_utc).total_seconds()
+                if age < 600:
+                    is_valid = True
+
+        if is_valid:
             results[sym] = db_data
             memory_cache[f"quote_{sym}"] = db_data
         else:
@@ -342,12 +347,12 @@ async def get_smart_stock_history(symbols: str, interval: str, session: Session)
             continue
 
         if is_market_hours:
-            last_candle_time = entries[-1].timestamp.astimezone(TZ_NY)
+            last_ts_utc = entries[-1].timestamp.replace(tzinfo=timezone.utc)
+            last_candle_time = last_ts_utc.astimezone(TZ_NY)
+            
             if (now - last_candle_time).total_seconds() > 3600:
-                # Data is older than 60 mins
                 symbols_to_fetch.append(sym)
             else:
-                # Cache the found data
                 entry = StockHistoryData(symbol=sym, history=entries)
                 cache_key = f"history_{sym}{interval}"
                 memory_cache[cache_key] = entry
