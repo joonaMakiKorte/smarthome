@@ -10,6 +10,11 @@ const completedTodos = ref<CompletedTask[]>([]);
 const currentTab = ref<'active' | 'completed'>('active');
 const isLoading = ref(false);
 
+const scrollContainer = ref<HTMLElement | null>(null);
+let isDown = false;
+let startY = 0;
+let scrollTop = 0;
+
 // --- Data Fetching ---
 
 // Fetch ACTIVE and COMPLETED tasks
@@ -73,6 +78,41 @@ const handleReopen = async (task: CompletedTask) => {
   resume();
 };
 
+// --- UI Helpers ---
+
+const getPriorityStyles = (priority: number) => {
+  switch (priority) {
+    case 1: // Gray
+      return 'bg-gradient-to-r from-slate-700/40 to-slate-800/20 border-slate-600/30';
+    case 2: // Blue
+      return 'bg-gradient-to-r from-blue-900/40 to-blue-800/20 border-blue-500/50 shadow-[0_0_10px_rgba(59,130,246,0.1)]';
+    case 3: // Orange
+      return 'bg-gradient-to-r from-orange-600/30 to-orange-800/10 border-orange-400/50 shadow-[0_0_15px_rgba(251,146,60,0.15)]';
+    case 4: // Red
+      return 'bg-gradient-to-r from-red-900/40 to-red-800/20 border-red-500/50 shadow-[0_0_10px_rgba(239,68,68,0.1)]';
+    default:
+      return 'bg-gradient-to-r from-slate-700/40 to-slate-800/20 border-slate-600/30';
+  }
+};
+
+// Drag Scrolling
+const onMouseDown = (e: MouseEvent) => {
+  if (!scrollContainer.value) return;
+  isDown = true;
+  scrollContainer.value.classList.add('active');
+  startY = e.pageY - scrollContainer.value.offsetTop;
+  scrollTop = scrollContainer.value.scrollTop;
+};
+const onMouseLeave = () => { isDown = false; scrollContainer.value?.classList.remove('active'); };
+const onMouseUp = () => { isDown = false; scrollContainer.value?.classList.remove('active'); };
+const onMouseMove = (e: MouseEvent) => {
+  if (!isDown || !scrollContainer.value) return;
+  e.preventDefault();
+  const y = e.pageY - scrollContainer.value.offsetTop;
+  const walk = (y - startY) * 2; 
+  scrollContainer.value.scrollTop = scrollTop - walk;
+};
+
 // --- Lifecycle ---
 
 // Poll only ACTIVE tasks every 10 seconds
@@ -87,7 +127,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="h-full w-full flex flex-col bg-slate-800 rounded-3xl border border-slate-700 shadow-xl overflow-hidden">
+  <div class="h-full w-full flex flex-col bg-slate-800 rounded-3xl border border-slate-700 shadow-xl overflow-hidden select-none">
     
     <div class="bg-slate-900/50 border-b border-slate-700 flex flex-col">
       <div class="p-4 flex justify-between items-center">
@@ -124,7 +164,14 @@ onMounted(() => {
       </div>
     </div>
 
-    <div class="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2 relative">
+    <div 
+      ref="scrollContainer"
+      @mousedown="onMouseDown"
+      @mouseleave="onMouseLeave"
+      @mouseup="onMouseUp"
+      @mousemove="onMouseMove"
+      class="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2 relative"
+    >
       
       <div v-if="isLoading && activeTodos.length === 0" class="absolute inset-0 flex items-center justify-center bg-slate-800 z-10">
         <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
@@ -138,12 +185,13 @@ onMounted(() => {
         <div 
           v-for="task in activeTodos" 
           :key="task.id" 
-          class="bg-slate-700/40 p-3 rounded-xl border border-slate-600/30 flex justify-between items-center group hover:bg-slate-700/60 transition-colors"
+          class="p-3 rounded-xl border flex justify-between items-center group transition-all duration-200 hover:scale-[1.01]"
+          :class="getPriorityStyles(task.priority)"
         >
-          <span class="text-slate-200 text-sm font-medium truncate mr-2">{{ task.content }}</span>
+          <span class="text-slate-200 text-sm font-medium truncate mr-2 drop-shadow-sm">{{ task.content }}</span>
           <button 
-            @click="handleComplete(task)"
-            class="shrink-0 bg-slate-800 text-slate-400 border border-slate-600 hover:bg-green-600 hover:text-white hover:border-green-500 px-3 py-1 rounded-lg text-xs font-bold transition-all"
+            @click.stop="handleComplete(task)"
+            class="shrink-0 bg-slate-800/80 backdrop-blur-sm text-slate-400 border border-slate-600 hover:bg-green-600 hover:text-white hover:border-green-500 px-3 py-1 rounded-lg text-xs font-bold transition-all"
           >
             Done
           </button>
@@ -165,7 +213,7 @@ onMounted(() => {
             <span class="text-slate-400 text-sm line-through truncate">{{ task.content }}</span>
           </div>
           <button 
-            @click="handleReopen(task)"
+            @click.stop="handleReopen(task)"
             class="shrink-0 text-xs text-slate-600 hover:text-blue-400 px-2 py-1"
           >
             Reopen
@@ -176,3 +224,13 @@ onMounted(() => {
     </div>
   </div>
 </template>
+
+<style scoped>
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome, Safari and Opera */
+}
+</style>
