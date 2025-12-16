@@ -92,7 +92,7 @@ def test_stock_watchlist(sync_client, session):
 def test_stock_pruning(sync_client, session):
     # Add two price entries
     time_now = datetime.now()
-    price1 = StockPriceEntry(symbol="AAPL", interval="1min", timestamp=time_now-timedelta(days=3), price=0.0)
+    price1 = StockPriceEntry(symbol="AAPL", interval="1min", timestamp=time_now-timedelta(days=4), price=0.0)
     price2 = StockPriceEntry(symbol="NVDA", interval="1min", timestamp=time_now, price=0.0)
     session.add(price1)
     session.add(price2)
