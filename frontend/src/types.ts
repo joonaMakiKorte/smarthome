@@ -89,3 +89,14 @@ export interface StockHistoryData {
     symbol: string;
     history: StockPriceEntry[];
 }
+
+
+export interface SensorData {
+    mac: string;
+    humidity: number;
+    temperature: number;
+    pressure: number;
+    battery: number;
+    rssi: number;
+    timestamp: string; // ISO 8601 string (UTC)
+}

@@ -357,6 +357,7 @@ async def get_smart_stock_history(symbols: str, interval: str, session: Session)
     symbols_to_fetch = []
     
     is_market_hours = start_dt.date() == now.date() and MARKET_OPEN <= now.time() < MARKET_CLOSE
+    data_lifespan = 60 if interval == "1min" else 300 # Define expiration limit for data (1min or 5min)
     for sym in missing_symbols:
         entries = history_map[sym]
         if not entries:
@@ -368,7 +369,7 @@ async def get_smart_stock_history(symbols: str, interval: str, session: Session)
             last_ts_utc = entries[-1].timestamp.replace(tzinfo=timezone.utc)
             last_candle_time = last_ts_utc.astimezone(TZ_NY)
             
-            if (now - last_candle_time).total_seconds() > 60:
+            if (now - last_candle_time).total_seconds() > data_lifespan:
                 symbols_to_fetch.append(sym)
             else:
                 cache_key = f"history_{sym}{interval}"

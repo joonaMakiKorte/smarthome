@@ -5,6 +5,7 @@ import HourlyForecast from './HourlyForecast.vue';
 import ElectricityChart from './ElectricityChart.vue';
 import NysseLiveBoard from './NysseLiveBoard.vue';
 import StockWatchlist from './StockWatchlist.vue';
+import RuuviWidget from './RuuviWidget.vue';
 </script>
 
 <template>
@@ -19,7 +20,7 @@ import StockWatchlist from './StockWatchlist.vue';
     </div>
 
     <div class="col-start-1 col-end-10 row-start-6 row-end-12 bg-slate-900/50 rounded-3xl border border-slate-800 border-dashed flex items-center justify-center text-slate-500">
-      <span>🌡️ Ruuvi Sensors</span>
+      <span> RuuviTag </span>
     </div>
 
     <div class="col-start-1 col-end-[21] row-start-[12] row-end-[16]">
