@@ -225,6 +225,7 @@ const onMouseMove = (e: MouseEvent) => {
 
 const QUOTE_INTERVAL_MIN = 10;
 const HISTORY_INTERVAL_MIN = 15;
+const HISTORY_FETCH_OFFSET = 2;
 const runScheduler = async () => {
   if (!isMarketOpen()) return;
   const now = new Date();
@@ -234,7 +235,7 @@ const runScheduler = async () => {
     await fetchQuotes();
   }
 
-  if (minutes % HISTORY_INTERVAL_MIN === 0) {
+  if (minutes % HISTORY_INTERVAL_MIN === HISTORY_FETCH_OFFSET) {
     if (!isDeadZone()) {
       await fetchHistory();
     }
@@ -263,6 +264,9 @@ onMounted(async () => {
   await fetchWatchlist();
   await fetchQuotes();
   
+  // API has 8 tokens/min limit, meaning history fetch must be delayed for over 4 symbol watchlist
+  const isDelayed = Object.keys(stockWatchlist.value).length >= 4;
+
   // Handle History with Dynamic Delay
   if (isDeadZone()) {
     // Calculate exact ms remaining until 9:35:05
@@ -270,13 +274,18 @@ onMounted(async () => {
     const etNow = new Date(now.toLocaleString("en-US", { timeZone: "America/New_York" }));
     const minutesWait = 35 - etNow.getMinutes();
     const secondsWait = 60 - etNow.getSeconds();
-    const msUntilOpen = ((minutesWait - 1) * 60 * 1000) + (secondsWait * 1000) + 5000;
+    let msUntilOpen = ((minutesWait - 1) * 60 * 1000) + (secondsWait * 1000) + 5000;
+
+    // If fetch must also be delayed, ensure msUntilOpen is at least one minute
+    if (isDelayed) msUntilOpen = Math.max(msUntilOpen, 60000)
    
     setTimeout(() => {
       fetchHistory();
     }, msUntilOpen); 
   } else {
-    await fetchHistory();
+    setTimeout(() => {
+      fetchHistory();
+    }, isDelayed ? 60000 : 2000); // 1 min delay if must be delayed, else 2 sec
   }
   isLoading.value = false;
 

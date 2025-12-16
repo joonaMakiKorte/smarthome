@@ -31,13 +31,15 @@ memory_cache = TTLCache(maxsize=CACHE_SIZE, ttl=60)
 
 # --- Helper Managers ---
 
-DAILY_CREDIT_LIMIT = 800 # Max 800 credits per day
-RPM_LIMIT = 8 # Max 8 requests per min
+DAILY_CREDIT_LIMIT = 800  # Max 800 credits per day
+RPM_LIMIT = 8             # Max 8 HTTP requests per min
+TPM_LIMIT = 8             # Max 8 Tokens (symbols) per min
 class APIGuard:
-    """Separates RPM (API constraint) from Credits (Quota constraint)."""
+    """Separates RPM (Requests), TPM (Tokens/Minute), and Daily Quota."""
     def __init__(self):
         self._credits_used = 0
         self._request_timestamps = deque()
+        self._token_timestamps = deque()   
         self._reset_daily_quota_if_needed()
 
     def _reset_daily_quota_if_needed(self):
@@ -50,20 +52,36 @@ class APIGuard:
     def can_proceed(self, symbol_count: int) -> bool:
         self._reset_daily_quota_if_needed()
         
-        # Check daily limit
+        # Check Daily Limit
         if self._credits_used + symbol_count > DAILY_CREDIT_LIMIT:
             return False
 
-        # Check Rate Limit (RPM)
         now = datetime.now().timestamp()
+
+        # Check Request Limit (RPM)
         while self._request_timestamps and self._request_timestamps[0] < now - 60:
             self._request_timestamps.popleft()
+        
+        # We need to make 1 new request. If we are already at 8, we can't proceed.
+        if len(self._request_timestamps) >= RPM_LIMIT:
+            return False
+
+        # Check Token Limit (TPM) - Clean and count
+        while self._token_timestamps and self._token_timestamps[0] < now - 60:
+            self._token_timestamps.popleft()
+
+        # Check if we have enought tokens left for requested symbols
+        if len(self._token_timestamps) + symbol_count > TPM_LIMIT:
+            return False
             
-        return len(self._request_timestamps) < RPM_LIMIT
+        return True
 
     def record_usage(self, symbol_count: int):
+        now = datetime.now().timestamp()
         self._credits_used += symbol_count
-        self._request_timestamps.append(datetime.now().timestamp())
+        self._request_timestamps.append(now)
+        for _ in range(symbol_count):
+            self._token_timestamps.append(now)
 
 # Global singleton
 api_guard = APIGuard()
@@ -360,10 +378,11 @@ async def get_smart_stock_history(symbols: str, interval: str, session: Session)
         if api_guard.can_proceed(len(symbols_to_fetch)):
             api_results = await _fetch_stock_history(symbols_to_fetch, start_dt, end_dt, interval)
 
+            # Record usage
+            api_guard.record_usage(len(symbols_to_fetch))
+
             for stock_data in api_results:               
                 history_map[stock_data.symbol] = stock_data.history
-
-            api_guard.record_usage(len(symbols_to_fetch))
 
             await run_in_threadpool(_bulk_save_history, session, api_results, interval)
 
