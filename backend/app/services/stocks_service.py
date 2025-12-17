@@ -141,6 +141,9 @@ async def _fetch_realtime_market_data(symbols: List[str]) -> List[StockQuote]:
     # Normalize input
     items = [data] if "name" in data else data.values()
 
+    # If market is closed, use market close timestamp for quote
+    close_timestamp = _get_last_market_close()
+    is_market_open = close_timestamp is None
     for item in items:
         results.append(StockQuote(
             symbol=item["symbol"],
@@ -151,7 +154,7 @@ async def _fetch_realtime_market_data(symbols: List[str]) -> List[StockQuote]:
             high=round(float(item["high"]), 2),
             low=round(float(item["low"]), 2),
             volume=int(item["volume"]),
-            timestamp=datetime.fromtimestamp(item["timestamp"], tz=timezone.utc)
+            timestamp=datetime.fromtimestamp(item["timestamp"], tz=timezone.utc) if is_market_open else close_timestamp.astimezone(timezone.utc)
         ))
     return results
 
@@ -277,8 +280,7 @@ async def get_smart_stock_quote(symbols: str, session: Session) -> List[StockQuo
             if last_market_close:
                 db_ts_ny = ts_utc.astimezone(TZ_NY)
                 
-                # Check if data belongs to the last known market day
-                if db_ts_ny.date() >= last_market_close.date():
+                if db_ts_ny.time() >= time(hour=15, minute=45): # 15 min buffer for market close
                     is_valid = True
             else:
                 # Accept quotes newer than minute
