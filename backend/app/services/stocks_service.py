@@ -229,16 +229,46 @@ def _bulk_save_quotes(session: Session, api_results: List[StockQuote]):
         session.merge(quote)
     session.commit()
 
-def _bulk_save_history(session: Session, api_results: List[StockHistoryData], interval: str):
+def _bulk_save_history(session: Session, api_results: List[StockHistoryData], interval: str, start_dt: datetime, end_dt: datetime):
     """Save stock history data to db and cache."""
-    for stock_data in api_results:
-        for entry in stock_data.history:
-            entry.symbol = stock_data.symbol
-            entry.interval = interval
-            session.merge(entry)
-        cache_key = f"history_{stock_data.symbol}{interval}"
-        memory_cache[cache_key] = stock_data.history
-    session.commit()
+    if not api_results:
+        return
+
+    # Convert window to UTC and make naive
+    start_utc_naive = start_dt.astimezone(timezone.utc).replace(tzinfo=None)
+    end_utc_naive = end_dt.astimezone(timezone.utc).replace(tzinfo=None)
+    
+    symbols_to_update = [d.symbol for d in api_results]
+    try:
+        # Delete existing records for these symbols in this window
+        statement = delete(StockPriceEntry).where(
+            StockPriceEntry.symbol.in_(symbols_to_update),
+            StockPriceEntry.interval == interval,
+            StockPriceEntry.timestamp >= start_utc_naive,
+            StockPriceEntry.timestamp <= end_utc_naive
+        )
+        session.exec(statement)
+
+        # Add new records
+        for stock_data in api_results:
+            for entry in stock_data.history:
+                # Ensure NAIVE UTC
+                if entry.timestamp.tzinfo is not None:
+                     entry.timestamp = entry.timestamp.astimezone(timezone.utc).replace(tzinfo=None)
+
+                entry.symbol = stock_data.symbol
+                entry.interval = interval
+                session.add(entry)
+            
+            # Update Cache
+            cache_key = f"history_{stock_data.symbol}{interval}"
+            memory_cache[cache_key] = stock_data.history
+        
+        session.commit()
+    except Exception as e:
+        session.rollback()
+        print(f"Error saving history: {e}")
+        raise e
 
 
 # --- Public functions ---
@@ -338,13 +368,16 @@ async def get_smart_stock_history(symbols: str, interval: str, session: Session)
 
     # Fetch entries fitting the window from db
     start_dt, end_dt = _get_target_session_window()
+
+    start_utc_naive = start_dt.astimezone(timezone.utc).replace(tzinfo=None)
+    end_utc_naive = end_dt.astimezone(timezone.utc).replace(tzinfo=None)
     db_entries_flat = await run_in_threadpool(lambda: session.exec(
         select(StockPriceEntry)
         .where(
             StockPriceEntry.symbol.in_(missing_symbols),
             StockPriceEntry.interval == interval,
-            StockPriceEntry.timestamp >= start_dt,
-            StockPriceEntry.timestamp <= end_dt
+            StockPriceEntry.timestamp >= start_utc_naive,
+            StockPriceEntry.timestamp <= end_utc_naive
         )
         .order_by(StockPriceEntry.timestamp.asc())
     ).all())
@@ -358,7 +391,9 @@ async def get_smart_stock_history(symbols: str, interval: str, session: Session)
     now = datetime.now(TZ_NY)
     symbols_to_fetch = []
     
-    is_market_hours = start_dt.date() == now.date() and MARKET_OPEN <= now.time() < MARKET_CLOSE
+    is_active_session = start_dt.date() == now.date() and MARKET_OPEN <= now.time() < MARKET_CLOSE
+    is_past_session = now > end_dt # Check if we are already over the session
+
     data_lifespan = 60 if interval == "1min" else 300 # Define expiration limit for data (1min or 5min)
     for sym in missing_symbols:
         entries = history_map[sym]
@@ -367,15 +402,32 @@ async def get_smart_stock_history(symbols: str, interval: str, session: Session)
             symbols_to_fetch.append(sym)
             continue
 
-        if is_market_hours:
-            last_ts_utc = entries[-1].timestamp.replace(tzinfo=timezone.utc)
-            last_candle_time = last_ts_utc.astimezone(TZ_NY)
-            
+        last_ts_utc = entries[-1].timestamp.replace(tzinfo=timezone.utc)
+        last_candle_time = last_ts_utc.astimezone(TZ_NY)
+
+        # Session is active -> check if data is not expired
+        if is_active_session:
             if (now - last_candle_time).total_seconds() > data_lifespan:
                 symbols_to_fetch.append(sym)
             else:
                 cache_key = f"history_{sym}{interval}"
                 memory_cache[cache_key] = entries
+
+        # Session has closed -> check if we have full data
+        elif is_past_session:
+            time_missing = (end_dt - last_candle_time).total_seconds()
+            
+            # Refetch if missing more than 10 minutes of data
+            if time_missing > 600: 
+                symbols_to_fetch.append(sym)
+            else:
+                cache_key = f"history_{sym}{interval}"
+                memory_cache[cache_key] = entries
+        
+        # Pre-market
+        else:
+             cache_key = f"history_{sym}{interval}"
+             memory_cache[cache_key] = entries
 
     if symbols_to_fetch:
         if api_guard.can_proceed(len(symbols_to_fetch)):
@@ -387,7 +439,7 @@ async def get_smart_stock_history(symbols: str, interval: str, session: Session)
             for stock_data in api_results:               
                 history_map[stock_data.symbol] = stock_data.history
 
-            await run_in_threadpool(_bulk_save_history, session, api_results, interval)
+            await run_in_threadpool(_bulk_save_history, session, api_results, interval, start_dt, end_dt)
 
     # Get results
     return [StockHistoryData(symbol=sym, history=history_map[sym]) for sym in symbol_list]

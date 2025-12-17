@@ -11,8 +11,10 @@ const stockWatchlist = ref<Record<string, Stock>>({});
 const stockQuotes = ref<Record<string, StockQuote>>({});
 const stockHistory = ref<{ [key in Interval]?: Record<string, StockPriceEntry[]> }>({});
 const selectedSymbol = ref<string | null>(null);
+
 const isLoading = ref(false); // Base loader for initial mount
 const isDetailLoading = ref(false); // Specific loader for detailed view
+const isInitialHistoryLoaded = ref(false); // Gatekeeper state
 
 let schedulerTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -89,6 +91,10 @@ const fetchHistory = async(forced: boolean = false) => {
     stockHistory.value[interval] = historyBucket;
   } catch (err) {
     console.error("Fetching history failed", err);
+  } finally {
+    if (!forced) {
+        isInitialHistoryLoaded.value = true;
+    }
   }
 }
 
@@ -130,6 +136,8 @@ const isDeadZone = (now = new Date()) => {
 };
 
 const selectStock = async (symbol: string) => {
+  if (!isInitialHistoryLoaded.value) return;
+
   selectedSymbol.value = symbol;
   isDetailLoading.value = true;
 
@@ -244,11 +252,7 @@ const runScheduler = async () => {
 
 const startPolling = () => {
   if (schedulerTimer) clearInterval(schedulerTimer);
-  
-  // Sync to next minute
   const msToNextMinute = 60000 - (new Date().getTime() % 60000);
-
-  // Add small jitter
   const jitter = Math.floor(Math.random() * 5000);
   
   setTimeout(() => {
@@ -259,10 +263,8 @@ const startPolling = () => {
 
 onMounted(async () => {
   isLoading.value = true;
-
-  // Initial fetch on mount
   await fetchWatchlist();
-  await fetchQuotes();
+  await fetchQuotes().finally(() => isLoading.value = false);
   
   // API has 8 tokens/min limit, meaning history fetch must be delayed for over 4 symbol watchlist
   const isDelayed = Object.keys(stockWatchlist.value).length >= 4;
@@ -287,7 +289,6 @@ onMounted(async () => {
       fetchHistory();
     }, isDelayed ? 60000 : 2000); // 1 min delay if must be delayed, else 2 sec
   }
-  isLoading.value = false;
 
   startPolling();
 });
@@ -423,10 +424,16 @@ onUnmounted(() => {
               v-for="symbol in Object.keys(stockWatchlist)" 
               :key="symbol"
               @click="selectStock(symbol)"
-              class="flex items-center justify-between py-4 px-6 hover:bg-zinc-900 transition-colors group cursor-pointer"
+              class="flex items-center justify-between py-4 px-6 transition-all duration-300 group"
+              :class="isInitialHistoryLoaded 
+                ? 'cursor-pointer hover:bg-zinc-900' 
+                : 'cursor-wait opacity-60 grayscale-[0.5]'"
             >
               <div class="w-[28%] flex flex-col">
-                <span class="text-lg font-bold text-white tracking-wide group-hover:text-blue-400 transition-colors">{{ symbol }}</span>
+                <span class="text-lg font-bold text-white tracking-wide transition-colors"
+                  :class="{'group-hover:text-blue-400': isInitialHistoryLoaded}">
+                  {{ symbol }}
+                </span>
                 <span class="text-xs text-zinc-500 truncate font-medium tracking-wide">{{ stockWatchlist[symbol].name }}</span>
               </div>
 
@@ -460,7 +467,9 @@ onUnmounted(() => {
                     class="transition-all duration-500 ease-out"
                   />
                 </svg>
-                <div v-else class="w-1/2 h-[2px] bg-zinc-800 rounded animate-pulse"></div>
+                <div v-else class="w-1/2 h-[2px] bg-zinc-800 rounded" 
+                    :class="isInitialHistoryLoaded ? 'animate-pulse' : 'opacity-30'">
+                </div>
               </div>
 
               <div class="w-[40%] flex flex-col items-end gap-1">
