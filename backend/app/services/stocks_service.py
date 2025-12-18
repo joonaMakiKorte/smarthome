@@ -141,9 +141,9 @@ async def _fetch_realtime_market_data(symbols: List[str]) -> List[StockQuote]:
     # Normalize input
     items = [data] if "name" in data else data.values()
 
-    # If market is closed, use market close timestamp for quote
+    # If market is closed, use market close timestamp for quote, else now
     close_timestamp = _get_last_market_close()
-    is_market_open = close_timestamp is None
+    quote_timestamp = datetime.now(timezone.utc) if close_timestamp is None else close_timestamp.astimezone(timezone.utc)
     for item in items:
         results.append(StockQuote(
             symbol=item["symbol"],
@@ -154,7 +154,7 @@ async def _fetch_realtime_market_data(symbols: List[str]) -> List[StockQuote]:
             high=round(float(item["high"]), 2),
             low=round(float(item["low"]), 2),
             volume=int(item["volume"]),
-            timestamp=datetime.fromtimestamp(item["timestamp"], tz=timezone.utc) if is_market_open else close_timestamp.astimezone(timezone.utc)
+            timestamp=quote_timestamp
         ))
     return results
 
@@ -252,13 +252,15 @@ def _bulk_save_history(session: Session, api_results: List[StockHistoryData], in
         # Add new records
         for stock_data in api_results:
             for entry in stock_data.history:
-                # Ensure NAIVE UTC
-                if entry.timestamp.tzinfo is not None:
-                     entry.timestamp = entry.timestamp.astimezone(timezone.utc).replace(tzinfo=None)
-
-                entry.symbol = stock_data.symbol
-                entry.interval = interval
-                session.add(entry)
+                # Create a NEW instance for the DB
+                db_entry = StockPriceEntry(
+                    symbol=stock_data.symbol,
+                    interval=interval,
+                    price=entry.price,
+                    # Ensure NAIVE UTC
+                    timestamp=entry.timestamp.astimezone(timezone.utc).replace(tzinfo=None)
+                )
+                session.add(db_entry)
             
             # Update Cache
             cache_key = f"history_{stock_data.symbol}{interval}"
