@@ -19,8 +19,8 @@ import RuuviWidget from './RuuviWidget.vue';
       <span>🏠 Status (Home Mode)</span>
     </div>
 
-    <div class="col-start-1 col-end-10 row-start-6 row-end-12 bg-slate-900/50 rounded-3xl border border-slate-800 border-dashed flex items-center justify-center text-slate-500">
-      <span> RuuviTag </span>
+    <div class="col-start-1 col-end-10 row-start-6 row-end-12">
+      <RuuviWidget />
     </div>
 
     <div class="col-start-1 col-end-[21] row-start-[12] row-end-[16]">

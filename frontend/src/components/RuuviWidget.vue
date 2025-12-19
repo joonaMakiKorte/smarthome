@@ -6,11 +6,18 @@ import type { SensorData } from '../types';
 const isConnected = ref(false);
 const latestData = ref<SensorData | null>(null);
 const displayData = ref<SensorData | null>(null); 
+
+// Rolling average buffers
+const tempHistory = ref<number[]>([]);
+const humidityHistory = ref<number[]>([]);
+const pressureHistory = ref<number[]>([]);
+
 let socket: WebSocket | null = null;
 let throttleTimer: ReturnType<typeof setTimeout> | null = null;
 
 // --- WebSocket ---
 
+const THROTTLE_MS = 2000; // Update UI every 2 seconds
 const connect = () => {
   const url = import.meta.env.VITE_RUUVI_URL;
   if (!url) { console.error("Missing VITE_RUUVI_URL"); return; }
@@ -25,14 +32,19 @@ const connect = () => {
     try {
       const parsed: SensorData = JSON.parse(event.data);
       latestData.value = parsed;
+
+      // Update History Buffers (Keep max 10)
+      updateHistory(tempHistory, parsed.temperature);
+      updateHistory(humidityHistory, parsed.humidity);
+      updateHistory(pressureHistory, parsed.pressure);
       
-      // Throttle (0.2Hz)
+      // Throttle (1Hz)
       if (!throttleTimer) {
         displayData.value = parsed;
         throttleTimer = setTimeout(() => {
           if (latestData.value) displayData.value = latestData.value;
           throttleTimer = null;
-        }, 5000);
+        }, THROTTLE_MS);
       }
     } catch (e) {
       console.error('Parse error', e);
@@ -43,6 +55,33 @@ const connect = () => {
     isConnected.value = false;
   };
 };
+
+// --- Helpers ---
+
+const HISTORY_SIZE = 50; // Ensure smoother data, slower reaction
+const updateHistory = (historyRef: any, newValue: number) => {
+  historyRef.value.push(newValue);
+  if (historyRef.value.length > HISTORY_SIZE) {
+    historyRef.value.shift();
+  }
+};
+
+const calculateAverage = (arr: number[]) => {
+  if (arr.length === 0) return 0;
+  return arr.reduce((a, b) => a + b, 0) / arr.length;
+};
+
+const averagedTemperature = computed(() => {
+  return calculateAverage(tempHistory.value).toFixed(1);
+});
+
+const averagedHumidity = computed(() => {
+  return calculateAverage(humidityHistory.value).toFixed(1);
+});
+
+const averagedPressure = computed(() => {
+  return calculateAverage(pressureHistory.value).toFixed(0);
+});
 
 // --- UI Helpers ---
 
@@ -81,3 +120,94 @@ onUnmounted(() => {
 });
 
 </script>
+
+<template>
+  <div class="h-full w-full bg-black rounded-3xl border border-slate-700 relative overflow-hidden flex flex-col p-8 shadow-2xl">
+    
+    <div v-if="!displayData" class="flex-1 flex flex-col items-center justify-center text-slate-400 animate-pulse gap-4">
+      <svg xmlns="http://www.w3.org/2000/svg" class="h-10 w-10 animate-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
+      <span class="text-lg font-bold tracking-widest">CONNECTING...</span>
+    </div>
+
+    <div v-else class="flex flex-col h-full justify-between z-10">
+      
+      <div class="flex justify-between items-center w-full">
+        
+        <div class="text-slate-500 font-bold text-xl uppercase tracking-widest">
+          RuuviTag
+        </div>
+
+        <div class="flex items-center gap-6">
+          
+          <div class="flex items-center" :title="`Signal: ${displayData.rssi} dBm`">
+            <div class="flex items-end gap-1 h-6">
+              <div 
+                v-for="bar in 4" 
+                :key="bar"
+                class="w-2 rounded-sm transition-colors duration-500"
+                :class="[
+                  bar <= signalBars ? 'bg-green-400' : 'bg-slate-800',
+                  bar === 1 ? 'h-2' : bar === 2 ? 'h-3' : bar === 3 ? 'h-5' : 'h-6'
+                ]"
+              ></div>
+            </div>
+          </div>
+
+          <div class="flex items-center gap-3 text-slate-200">
+             <span class="text-sm font-mono font-bold">{{ batteryPercentage }}%</span>
+             <div class="relative w-8 h-4 border-2 border-slate-400 rounded-sm p-0.5">
+               <div class="absolute -right-1.5 top-1/2 -translate-y-1/2 w-1 h-2 bg-slate-400 rounded-r-sm"></div>
+               <div 
+                  class="h-full rounded-[1px] transition-all duration-500"
+                  :class="{
+                    'bg-green-400': parseInt(batteryPercentage) > 50,
+                    'bg-yellow-400': parseInt(batteryPercentage) <= 50 && parseInt(batteryPercentage) > 20,
+                    'bg-red-500': parseInt(batteryPercentage) <= 20
+                  }"
+                  :style="{ width: `${batteryPercentage}%` }"
+               ></div>
+             </div>
+          </div>
+
+        </div>
+      </div>
+
+      <div class="flex items-end justify-between flex-1 w-full">
+        
+        <div class="flex flex-col justify-end -mb-2">
+          <div class="flex items-center gap-2 text-slate-500 text-xl font-bold uppercase tracking-wider pl-2 mb-2">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 4v10.54a4 4 0 1 1-4 0V4a2 2 0 0 1 4 0Z"/><path d="M12 11.1V4"/></svg>
+            Temperature
+          </div>
+          <div class="text-[8rem] lg:text-[10rem] font-black text-white tracking-tighter leading-[0.75] -ml-2">
+            {{ averagedTemperature }}<span class="text-6xl text-slate-600 font-light ml-2">°C</span>
+          </div>
+        </div>
+
+        <div class="flex flex-col items-end gap-10">
+          
+          <div class="flex flex-col items-end">
+            <div class="flex items-center gap-2 text-slate-400 text-sm font-bold uppercase tracking-wider mb-1">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22a7 7 0 0 0 7-7c0-2-5-9-7-15-2 6-7 13-7 15a7 7 0 0 0 7 7Z"/></svg>
+              Humidity
+            </div>
+            <div class="text-4xl font-bold text-slate-200">
+              {{ averagedHumidity }} <span class="text-xl text-slate-500 font-medium">%</span>
+            </div>
+          </div>
+
+          <div class="flex flex-col items-end">
+             <div class="flex items-center gap-2 text-slate-400 text-sm font-bold uppercase tracking-wider mb-1">
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 text-purple-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18"/><path d="M3 12h18"/><circle cx="12" cy="12" r="9" /></svg>
+              Pressure
+            </div>
+            <div class="text-4xl font-bold text-slate-200">
+              {{ averagedPressure }} <span class="text-xl text-slate-500 font-medium">hPa</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+    </div>
+  </div>
+</template>
