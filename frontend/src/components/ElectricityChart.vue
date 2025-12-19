@@ -87,7 +87,7 @@ const displayedData = computed(() => {
 // Global Max Price
 const globalMaxPrice = computed(() => {
   const allData = cache.value[selectedInterval.value] || [];
-  const defaults = [10]; // Minimum scale base
+  const defaults = [];
 
   // Filter out any data points from yesterday or before
   const todayDate = new Date(now.value)
