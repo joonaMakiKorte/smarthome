@@ -1,4 +1,5 @@
 import asyncio
+import logging
 from app.services import todoist_service, electricity_service, stocks_service, network_service
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -9,6 +10,9 @@ from sqlmodel import Session
 # Global state
 scheduler = AsyncIOScheduler()
 background_tasks = set() # Prevents garbage collection
+
+error_logger = logging.getLogger("uvicorn.error")
+info_logger = logging.getLogger("uvicorn.info")
 
 async def start_periodic_services():
     """
@@ -25,6 +29,8 @@ async def start_periodic_services():
 
     if not scheduler.running:
         scheduler.start()
+
+    info_logger.info("Started periodic services.")
 
 async def stop_periodic_services():
     """
@@ -44,6 +50,8 @@ async def stop_periodic_services():
     
     background_tasks.clear()
 
+    info_logger.info("Stopped periodic services.")
+
 def _start_task(coroutine, name):
     """Helper to start a task and keep a strong reference."""
     task = asyncio.create_task(coroutine, name=name)
@@ -59,7 +67,7 @@ async def _run_todoist_poller():
             try:
                 await todoist_service.refresh_tasks()
             except Exception as e:
-                print(f"Error in todoist poller: {e}")
+                error_logger.error(f"Error in todoist poller: {e}")
             
             await asyncio.sleep(10)
     except asyncio.CancelledError:
@@ -74,7 +82,7 @@ async def _run_network_scan_poller():
             try:
                 await network_service.run_network_status_scan()
             except Exception as e:
-                print(f"Error in network poller: {e}")
+                error_logger.error(f"Error in network poller: {e}")
             
             await asyncio.sleep(5)
     except asyncio.CancelledError:
@@ -98,7 +106,7 @@ async def _electricity_job_wrapper():
                     return
 
             except Exception as e:
-                print(f"Error in electricity job: {e}")
+                error_logger.error(f"Error in electricity job: {e}")
 
         await asyncio.sleep(RETRY_DELAY)
 
@@ -131,7 +139,7 @@ async def _stocks_prune_wrapper():
             # Run the sync function in a threadpool
             await asyncio.to_thread(stocks_service.prune_db_history, session)
         except Exception as e:
-            print(f"Error in stocks prune job: {e}")
+            error_logger.error(f"Error in stocks prune job: {e}")
 
 async def _create_stocks_scheduler():
     """Prunes stock history at 9:30 NY time daily + at initial launch"""

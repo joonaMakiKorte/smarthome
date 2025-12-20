@@ -5,11 +5,11 @@ from app.services import stocks_service
 from app.utils import handle_upstream_errors
 from typing import List
 from app.schemas import StockHistoryData
-from app.models import Stock, StockQuote, StockPriceEntry
-from datetime import datetime, timedelta
-from zoneinfo import ZoneInfo
+from app.models import Stock, StockQuote
+import logging
 
 router = APIRouter()
+logger = logging.getLogger("uvicorn.error")
 
 @router.get("/stocks/watchlist", response_model=List[Stock])
 def get_watchlist(session: Session = Depends(get_session)):
@@ -36,7 +36,7 @@ def remove_stock(symbol: str, session: Session = Depends(get_session)):
     """Delete a stock from watchlist"""
     stock = session.get(Stock, symbol)
     if not stock:
-        print("Error deleting stock from watchlist")
+        logger.error("Error deleting stock from watchlist.")
         raise HTTPException(
             status_code=404,
             detail="Stock not found"

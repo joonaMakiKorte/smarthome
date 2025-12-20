@@ -6,8 +6,10 @@ from app.schemas import StopTimetable
 from app.services import stops_service
 from app.utils import handle_upstream_errors
 from typing import List
+import logging
 
 router = APIRouter()
+logger = logging.getLogger("uvicorn.error")
 
 @router.get("/stops/watchlist", response_model=List[StopWatchlist])
 def get_stops(session: Session = Depends(get_session)):
@@ -33,6 +35,7 @@ def remove_stop(gtfs_id: str, session: Session = Depends(get_session)):
     """Delete a stop from watchlist"""
     stop = session.get(StopWatchlist, gtfs_id)
     if not stop:
+        logger.error("Error deleting stop from watchlist.")
         raise HTTPException(
             status_code=404,
             detail="Stop not found")

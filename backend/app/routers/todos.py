@@ -6,8 +6,10 @@ from app.services import todoist_service
 from app.schemas import TodoTask
 from app.models import CompletedTask
 from app.utils import handle_upstream_errors
+import logging
 
 router = APIRouter()
+logger = logging.getLogger("uvicorn.error")
 
 @router.get("/todos", response_model=List[TodoTask])
 async def read_todos():
@@ -28,7 +30,7 @@ async def complete_todo(task_id: str, task_content: str, priority: int, session:
     #async with handle_upstream_errors("Todoist"):
     success = await todoist_service.complete_task(session, task_id, task_content, priority)
     if not success:
-        print("Error completing task in Todoist")
+        logger.error("Error completing task in Todoist")
         raise HTTPException(
             status_code=400,
             detail="Could not complete task in Todoist")
@@ -40,7 +42,7 @@ async def reopen_todo(task_id: str, session: Session = Depends(get_session)):
     async with handle_upstream_errors("Todoist"):
         success = await todoist_service.reopen_task(session, task_id)
     if not success:
-        print("Error reopening task in Todoist")
+        logger.error("Error reopening task in Todoist")
         raise HTTPException(
             status_code=400,
             detail="Could not reopen task in Todoist")

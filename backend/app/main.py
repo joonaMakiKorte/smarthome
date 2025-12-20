@@ -31,8 +31,4 @@ app.include_router(stops.router)
 app.include_router(ruuvitag.router)
 app.include_router(network.router)
 
-@app.get("/health")
-async def health_check():
-    return {"status": "ok"}
-
 # uvicorn app.main:app --reload

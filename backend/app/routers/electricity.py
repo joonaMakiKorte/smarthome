@@ -6,8 +6,10 @@ from app.utils import handle_upstream_errors
 from typing import List
 from app.schemas import ElectricityPriceInterval, AvgElectricityPrice
 from datetime import datetime, timezone, timedelta
+import logging
 
 router = APIRouter()  
+logger = logging.getLogger("uvicorn.error")
 
 @router.post("/electricity/refresh")
 async def refresh_electricity_prices(session: Session = Depends(get_session)):
@@ -28,7 +30,7 @@ def get_10_day_avg(session: Session = Depends(get_session)):
     avg = electricity_service.calculate_10_day_avg(session)
 
     if avg is None:
-        print("No electricity data found")
+        logger.error("No electricity data found.")
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="No electricity data found for the last 10 days"
