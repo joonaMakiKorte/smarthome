@@ -12,3 +12,4 @@ influxdb-client>=1.40.0
 cachetools>=6.0.0
 asyncache
 apscheduler
+psutil>=7.0.0

@@ -72,3 +72,14 @@ class SensorData(BaseModel):
     rssi: int = Field(..., le=0, description="Received signal strength indicator")
     timestamp: datetime = Field(..., description="Timestamp of the recorded data")
     
+
+class NetworkHealth(BaseModel):
+    """Schema for network performance metrics"""
+    connected: bool = Field(...)
+    ssid: str = Field(..., description="WiFi SSID (name)")
+    signal_quality: float = Field(..., ge=0, le=100, description="WiFi link quality as percentages (0-100)")
+    wan_latency_ms: float | None = Field(..., description="Internet latency (WAN ping)")
+    lan_latency_ms: float | None = Field(..., description="Local latency (LAN ping)")
+    packet_loss: float | None = Field(..., ge=0, le=100, description="Percentage of lost packets (0-100)")
+    server_upload_mbps: float = Field(..., ge=0, description="Server upload speed")
+    server_download_mbps: float = Field(..., ge=0, description="Server download speed")
