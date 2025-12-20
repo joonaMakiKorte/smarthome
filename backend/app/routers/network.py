@@ -18,3 +18,16 @@ async def get_network_health():
             detail="Network monitoring service is currently unavailable"
         )
     
+@router.post("/network/health/refresh")
+async def scan_network_health():
+    """Scans network health into cache."""
+    try:
+        await network_service.run_network_status_scan()
+        return {"status" : "Network scanned"}
+    except Exception as e:
+        logger.error(f"Network Health API Error: {str(e)}")
+        raise HTTPException(
+            status_code=503,
+            detail="Network monitoring service is currently unavailable"
+        )
+    

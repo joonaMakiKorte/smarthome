@@ -1,38 +1,84 @@
 import asyncio
-from app.services import todoist_service, electricity_service, stocks_service
+from app.services import todoist_service, electricity_service, stocks_service, network_service
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from zoneinfo import ZoneInfo
 from app.database import engine
 from sqlmodel import Session
 
-# Global scheduler
+# Global state
 scheduler = AsyncIOScheduler()
+background_tasks = set() # Prevents garbage collection
 
 async def start_periodic_services():
     """
-    Launches all background loops as independent async tasks.
-    Adds scheduler tasks and starts the scheduler
+    Launches all background loops and schedulers.
+    Called on App Startup.
     """
     # Run asyncio tasks
-    asyncio.create_task(_run_todoist_poller())
+    _start_task(_run_todoist_poller(), "todoist_poller")
+    _start_task(_run_network_scan_poller(), "network_poller")
 
     # Create and run schedulers
     await _create_electricity_scheduler()
     await _create_stocks_scheduler()
-    scheduler.start()
+
+    if not scheduler.running:
+        scheduler.start()
+
+async def stop_periodic_services():
+    """
+    Stops all background activity.
+    Called on App Shutdown
+    """
+    if scheduler.running:
+        scheduler.shutdown(wait=False)
+    
+    # Cancel infinite loops
+    for task in background_tasks:
+        task.cancel()
+    
+    # Wait for them to finish cancelling
+    if background_tasks:
+        await asyncio.gather(*background_tasks, return_exceptions=True)
+    
+    background_tasks.clear()
+
+def _start_task(coroutine, name):
+    """Helper to start a task and keep a strong reference."""
+    task = asyncio.create_task(coroutine, name=name)
+    background_tasks.add(task)
+    task.add_done_callback(background_tasks.discard) # Remove from set if finishes/crashes naturally
 
 # --- Todoist ---
     
 async def _run_todoist_poller():
     """Polls Todoist every 10 seconds."""
-    while True:
-        try:
-            await todoist_service.refresh_tasks()
-        except Exception as e:
-            print(f"Error in todoist poller: {e}")
-        
-        await asyncio.sleep(10)
+    try:
+        while True:
+            try:
+                await todoist_service.refresh_tasks()
+            except Exception as e:
+                print(f"Error in todoist poller: {e}")
+            
+            await asyncio.sleep(10)
+    except asyncio.CancelledError:
+        pass # Allows the task to stop cleanly
+
+# --- Network ---
+
+async def _run_network_scan_poller():
+    """Scans network health every 5 seconds."""
+    try:
+        while True:
+            try:
+                await network_service.run_network_status_scan()
+            except Exception as e:
+                print(f"Error in network poller: {e}")
+            
+            await asyncio.sleep(5)
+    except asyncio.CancelledError:
+        pass
 
 # --- Electricity ---
 

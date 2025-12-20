@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import patch, AsyncMock
 from app.schemas import NetworkHealth
+from app.services.network_service import health_cache
 
 @pytest.fixture
 def mock_health_data():
@@ -14,6 +15,13 @@ def mock_health_data():
         ssid="TestWiFi",
         signal_quality=85
     )
+
+@pytest.fixture(autouse=True)
+def reset_task_cache():
+    """Automatically runs before every test to clear the global singleton cache."""
+    health_cache._cache = []
+    health_cache._last_updated = None
+    yield
 
 # pytest tests/test_network.py::test_get_network_health
 @pytest.mark.asyncio
