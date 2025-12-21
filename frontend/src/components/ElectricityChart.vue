@@ -187,8 +187,8 @@ const drawChart = () => {
     
     ctx.beginPath();
     ctx.strokeStyle = COLORS.avgLine;
-    ctx.lineWidth = 1;
-    ctx.setLineDash([4, 4]); // Dashed
+    ctx.lineWidth = 3;
+    ctx.setLineDash([]); // Dashed
     ctx.moveTo(0, avgY);
     ctx.lineTo(W, avgY);
     ctx.stroke();
@@ -208,8 +208,8 @@ const drawChart = () => {
       const x = currentIndex * barWidth;
       ctx.beginPath();
       ctx.strokeStyle = 'rgba(255, 255, 255, 0.9)';
-      ctx.lineWidth = 1;
-      ctx.setLineDash([3, 3]);
+      ctx.lineWidth = 3;
+      ctx.setLineDash([]);
       ctx.moveTo(x, 0);
       ctx.lineTo(x, H);
       ctx.stroke();
@@ -277,15 +277,15 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="w-full h-full bg-slate-900/50 rounded-3xl border border-slate-800 border-dashed flex flex-col p-5 relative overflow-hidden group select-none">
+  <div class="w-full h-full bg-[#1A224C] rounded-3xl border border-white/10 border-dashed flex flex-col p-5 relative overflow-hidden group select-none">
     
     <div class="flex justify-between items-center mb-4 z-10">
       
-      <div class="flex bg-slate-800/80 p-1 rounded-lg border border-slate-700/50 h-fit">
+      <div class="flex bg-white/5 p-1 rounded-lg border border-white/10 h-fit">
         <button 
           @click="selectedDay = 'today'"
           class="w-28 py-1.5 rounded-md text-base font-bold transition-all duration-200 flex justify-center"
-          :class="selectedDay === 'today' ? 'bg-slate-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'"
+          :class="selectedDay === 'today' ? 'bg-[#2E3B6E] text-white shadow-sm ring-1 ring-white/10' : 'text-slate-400 hover:text-slate-200'"
         >
           Today
         </button>
@@ -294,7 +294,7 @@ onUnmounted(() => {
           @click="selectedDay = 'tomorrow'"
           :disabled="!hasTomorrowData"
           class="w-28 py-1.5 rounded-md text-base font-bold transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-30 disabled:cursor-not-allowed"
-          :class="selectedDay === 'tomorrow' ? 'bg-slate-600 text-white shadow-sm' : 'text-slate-400 hover:text-slate-200'"
+          :class="selectedDay === 'tomorrow' ? 'bg-[#2E3B6E] text-white shadow-sm ring-1 ring-white/10' : 'text-slate-400 hover:text-slate-200'"
         >
           <span v-if="isPendingRelease" class="relative flex h-2 w-2">
             <span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75"></span>
@@ -305,7 +305,7 @@ onUnmounted(() => {
       </div>
 
       <div v-if="currentPrice" class="flex items-baseline gap-2">
-        <span class="text-sm text-slate-500 uppercase font-bold tracking-wider">Current</span>
+        <span class="text-sm text-slate-400 uppercase font-bold tracking-wider">Current</span>
         
         <div class="flex items-baseline gap-1">
           <span 
@@ -314,29 +314,29 @@ onUnmounted(() => {
           >
             {{ currentPrice.price.toFixed(2) }}
           </span>
-          <span class="text-sm text-slate-500 font-medium">c/kWh</span>
+          <span class="text-sm text-slate-400 font-medium">c/kWh</span>
         </div>
       </div>
       <div v-else class="flex items-center opacity-0">
           <span class="text-4xl">-</span>
       </div>
 
-      <div class="flex items-center space-x-2 bg-slate-800/50 px-3 py-1.5 rounded-lg border border-slate-700/30 h-fit">
+      <div class="flex items-center space-x-2 bg-white/5 px-3 py-1.5 rounded-lg border border-white/10 h-fit">
         <label class="cursor-pointer group">
           <input type="radio" value="1h" v-model="selectedInterval" @change="fetchData('1h')" class="peer hidden">
-          <span class="text-base font-mono px-2 py-0.5 rounded transition-colors text-slate-500 peer-checked:text-blue-300 peer-checked:bg-slate-700/50">1H</span>
+          <span class="text-base font-mono px-2 py-0.5 rounded transition-colors text-slate-400 peer-checked:text-blue-200 peer-checked:bg-white/10">1H</span>
         </label>
-        <span class="text-slate-700 text-sm">|</span>
+        <span class="text-slate-600 text-sm">|</span>
         <label class="cursor-pointer group">
           <input type="radio" value="15min" v-model="selectedInterval" @change="fetchData('15min')" class="peer hidden">
-          <span class="text-base font-mono px-2 py-0.5 rounded transition-colors text-slate-500 peer-checked:text-blue-300 peer-checked:bg-slate-700/50">15M</span>
+          <span class="text-base font-mono px-2 py-0.5 rounded transition-colors text-slate-400 peer-checked:text-blue-200 peer-checked:bg-white/10">15M</span>
         </label>
       </div>
     </div>
 
     <div class="flex flex-1 min-h-0 w-full gap-3">
       
-      <div class="flex flex-col h-full flex-shrink-0 text-right pr-2 text-sm text-slate-500 font-mono">
+      <div class="flex flex-col h-full flex-shrink-0 text-right pr-2 text-sm text-slate-400 font-mono">
         <div class="relative flex-1">
           <div class="absolute -top-2.5 -bottom-2.5 left-0 right-0 flex flex-col justify-between">
             <span>{{ globalMaxPrice }}</span>
@@ -346,7 +346,6 @@ onUnmounted(() => {
             <span>0</span>
           </div>
         </div>
-
         <div class="mt-2 opacity-0 select-none">00</div>
       </div>
 
@@ -354,15 +353,15 @@ onUnmounted(() => {
         <div class="flex-1 w-full min-h-0 relative">
           <canvas ref="canvasRef" class="w-full h-full block"></canvas>
 
-          <div v-if="isLoading && displayedData.length === 0" class="absolute inset-0 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm rounded-lg">
-            <span class="text-slate-400 animate-pulse text-base">Loading...</span>
+          <div v-if="isLoading && displayedData.length === 0" class="absolute inset-0 flex items-center justify-center bg-[#1A224C]/80 backdrop-blur-sm rounded-lg">
+            <span class="text-slate-300 animate-pulse text-base">Loading...</span>
           </div>
-          <div v-if="!isLoading && displayedData.length === 0" class="absolute inset-0 flex items-center justify-center text-slate-500 text-base">
+          <div v-if="!isLoading && displayedData.length === 0" class="absolute inset-0 flex items-center justify-center text-slate-400 text-base">
             No Data
           </div>
         </div>
 
-        <div class="flex justify-between w-full mt-2 text-sm text-slate-600 font-mono px-0.5">
+        <div class="flex justify-between w-full mt-2 text-sm text-slate-400 font-mono px-0.5">
           <span>00</span>
           <span>06</span>
           <span>12</span>
