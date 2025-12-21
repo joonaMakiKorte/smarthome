@@ -12,7 +12,7 @@ def reset_task_cache():
 @pytest.mark.asyncio
 async def test_get_network_health_real_data(async_client):
     """Test fetching real network health data"""
-    response = await async_client.get("/network/health")
+    response = await async_client.get("/network")
 
     assert response.status_code == 200
     

@@ -30,7 +30,7 @@ async def test_get_network_health(async_client, mock_health_data):
     with patch("app.services.network_service.get_network_status", new_callable=AsyncMock) as mock_service:
         mock_service.return_value = mock_health_data
 
-        response = await async_client.get("/network/health")
+        response = await async_client.get("/network")
 
         assert response.status_code == 200
         data = response.json()

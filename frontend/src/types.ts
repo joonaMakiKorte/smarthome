@@ -100,3 +100,15 @@ export interface SensorData {
     rssi: number;
     timestamp: string; // ISO 8601 string (UTC)
 }
+
+
+export interface NetworkHealth {
+    connected: boolean;
+    ssid: string;
+    signal_quality: number;
+    wan_latency_ms: number | null;
+    lan_latency_ms: number | null;
+    packet_loss: number | null;
+    server_upload_mbps: number;
+    server_download_mbps: number;
+}

@@ -6,6 +6,7 @@ import ElectricityChart from './ElectricityChart.vue';
 import NysseLiveBoard from './NysseLiveBoard.vue';
 import StockWatchlist from './StockWatchlist.vue';
 import RuuviWidget from './RuuviWidget.vue';
+import NetworkStatus from './NetworkStatus.vue';
 </script>
 
 <template>
@@ -15,8 +16,8 @@ import RuuviWidget from './RuuviWidget.vue';
       <Clock />
     </div>
 
-    <div class="col-start-1 col-end-10 row-start-3 row-end-6 bg-slate-900/50 rounded-3xl border border-slate-800 border-dashed flex items-center justify-center text-slate-500">
-      <span>🏠 Status (Home Mode)</span>
+    <div class="col-start-1 col-end-10 row-start-3 row-end-6">
+      <NetworkStatus />
     </div>
 
     <div class="col-start-1 col-end-10 row-start-6 row-end-12">

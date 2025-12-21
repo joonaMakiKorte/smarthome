@@ -6,7 +6,7 @@ from app.schemas import NetworkHealth
 router = APIRouter()
 logger = logging.getLogger("uvicorn.error")
 
-@router.get("/network/health", response_model=NetworkHealth)
+@router.get("/network", response_model=NetworkHealth)
 async def get_network_health():
     """Get current network health."""
     try:
@@ -18,7 +18,7 @@ async def get_network_health():
             detail="Network monitoring service is currently unavailable"
         )
     
-@router.post("/network/health/refresh")
+@router.post("/network/refresh")
 async def scan_network_health():
     """Scans network health into cache."""
     try:
