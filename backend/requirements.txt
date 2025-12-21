@@ -13,3 +13,4 @@ cachetools>=6.0.0
 asyncache
 apscheduler
 psutil>=7.0.0
+bleak
