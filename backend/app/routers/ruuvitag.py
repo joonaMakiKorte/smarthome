@@ -17,7 +17,7 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         info_logger.info("RuuviTag WebSocket connected.")
         # Subscribe the websocket to the async generator
-        async for data in service.stream_data(interval=0.2):
+        async for data in service.stream_data():
             await websocket.send_text(data.model_dump_json())
     except WebSocketDisconnect:
         info_logger.info("RuuviTag WebSocket disconnected.")

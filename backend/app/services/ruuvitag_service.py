@@ -129,7 +129,7 @@ class MockRuuviSensor:
         new_val = max(min_val, min(new_val, max_val))
         return round(new_val, decimal_places)
 
-    async def stream_data(self, interval: float = 0.1):
+    async def stream_data(self, interval: float = 0.2):
         """Async generator that yields a new data packet continuously based on the previous state."""
         self.running = True
 
