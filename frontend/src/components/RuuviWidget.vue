@@ -17,12 +17,14 @@ let throttleTimer: ReturnType<typeof setTimeout> | null = null;
 
 // --- WebSocket ---
 
+// Automatically detect the host
+const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+const host = window.location.host;
+const URL = `${protocol}//${host}/api/ruuvitag/ws`;
+
 const THROTTLE_MS = 2000; // Update UI every 2 seconds
 const connect = () => {
-  const url = import.meta.env.VITE_RUUVI_URL;
-  if (!url) { console.error("Missing VITE_RUUVI_URL"); return; }
-  
-  socket = new WebSocket(url);
+  socket = new WebSocket(URL);
 
   socket.onopen = () => {
     isConnected.value = true;

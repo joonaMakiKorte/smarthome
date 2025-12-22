@@ -1,0 +1,38 @@
+services:
+  # -----------------------------------------------------------
+  # BACKEND SERVICE (FastAPI + Hardware Access)
+  # -----------------------------------------------------------
+  backend:
+    build: ./backend
+    container_name: dashboard_backend
+    
+    restart: unless-stopped
+    
+    # -----------------------------
+    # HARDWARE ACCESS CONFIGURATION
+    # -----------------------------
+    network_mode: host
+    privileged: true
+    
+    volumes:
+      - /var/run/dbus:/var/run/dbus
+      - ./backend/data:/app/data 
+    
+    env_file:
+      - .env
+
+    environment:
+      - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket
+      - PYTHONUNBUFFERED=1
+      - DB_FILE=data/database.db
+
+  # -----------------------------------------------------------
+  # FRONTEND SERVICE (Nginx + Static Vue Files)
+  # -----------------------------------------------------------
+  frontend:
+    build: ./frontend
+    container_name: dashboard_frontend
+    
+    restart: unless-stopped
+
+    network_mode: host
