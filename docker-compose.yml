@@ -4,7 +4,9 @@ services:
   # -----------------------------------------------------------
   backend:
     build: ./backend
-    container_name: dashboard_backend
+    image: joonamakikorte/smarthome_backend:latest
+    platform: linux/arm64
+    container_name: smarthome_backend
     
     restart: unless-stopped
     
@@ -31,7 +33,9 @@ services:
   # -----------------------------------------------------------
   frontend:
     build: ./frontend
-    container_name: dashboard_frontend
+    image: joonamakikorte/smarthome_frontend:latest
+    platform: linux/arm64
+    container_name: smarthome_frontend
     
     restart: unless-stopped
 
