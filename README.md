@@ -93,14 +93,13 @@ and pulling them onto the Raspberry Pi.
 **1. Build & Push (From PC)**
 ```bash
 # Login to Docker Hub
-# Login to Docker Hub
 docker login
 
 # Build and Push Backend
-docker buildx build --platform linux/arm64 -t your_username/dashboard_backend:latest ./backend --push
+docker buildx build --platform linux/arm64 -t your_username/smarthome_backend:latest ./backend --push
 
 # Build and Push Frontend
-docker buildx build --platform linux/arm64 -t your_username/dashboard_frontend:latest ./frontend --push
+docker buildx build --platform linux/arm64 -t your_username/smarthome_frontend:latest ./frontend --push
 ```
 
 **2. Deploy to Raspberry Pi**
