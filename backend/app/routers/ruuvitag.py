@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from app.services import ruuvitag_service
 
@@ -16,9 +17,13 @@ async def websocket_endpoint(websocket: WebSocket):
     service = ruuvitag_service.get_sensor_service()
     try:
         info_logger.info("RuuviTag WebSocket connected.")
-        # Subscribe the websocket to the async generator
-        async for data in service.stream_data():
-            await websocket.send_text(data.model_dump_json())
+        while True:
+            data = service.latest_data     
+            if data:
+                await websocket.send_text(data.model_dump_json())
+            
+            # Wait 1 second for rate limiting
+            await asyncio.sleep(1)
     except WebSocketDisconnect:
         info_logger.info("RuuviTag WebSocket disconnected.")
     except Exception as e:

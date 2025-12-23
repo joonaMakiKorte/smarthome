@@ -1,6 +1,6 @@
 import asyncio
 import logging
-from app.services import todoist_service, electricity_service, stocks_service, network_service
+from app.services import todoist_service, electricity_service, stocks_service, network_service, ruuvitag_service
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from zoneinfo import ZoneInfo
@@ -30,6 +30,10 @@ async def start_periodic_services():
     if not scheduler.running:
         scheduler.start()
 
+    # Start RuuviTag Scanner
+    ruuvi = ruuvitag_service.get_sensor_service()
+    await ruuvi.start_scanning()
+
     info_logger.info("Started periodic services.")
 
 async def stop_periodic_services():
@@ -49,6 +53,10 @@ async def stop_periodic_services():
         await asyncio.gather(*background_tasks, return_exceptions=True)
     
     background_tasks.clear()
+
+    # Stop RuuviTag Scanner
+    ruuvi = ruuvitag_service.get_sensor_service()
+    await ruuvi.stop_scanning()
 
     info_logger.info("Stopped periodic services.")
 

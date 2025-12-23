@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 from app.schemas import SensorData
 from dotenv import load_dotenv
 from bleak import BleakScanner
+from typing import Optional
 
 error_logger = logging.getLogger("uvicorn.error")
 info_logger = logging.getLogger("uvicorn.info")
@@ -15,12 +16,15 @@ class RuuviSensor:
     def __init__(self, mac_address: str):
         """Interfaces with a real RuuviTag using Bleak."""
         self.mac_target = mac_address.upper()
-        self._queue = asyncio.Queue()
-        self.running = False
         self._scanner = None
+        self._latest_data: Optional[SensorData] = None
 
         # Default Ruuvi Manufacturer ID
         self.RUUVI_MANUFACTURER_ID = 0x0499
+
+    @property
+    def latest_data(self) -> Optional[SensorData]:
+        """Read-only access to the latest known data."""
 
     def _decode_data(self, raw_data: bytes, rssi: int, device_mac: str) -> SensorData:
         """Decodes Ruuvi Raw Format 5 (RAWv2)"""
@@ -69,101 +73,76 @@ class RuuviSensor:
         try:
             parsed_data = self._decode_data(raw_data, advertisement_data.rssi, device.address)
             if parsed_data:
-                # Put into the async queue for the generator to pick up
-                self._queue.put_nowait(parsed_data)
-        except Exception:
-            return # Quit gracefully
+                self._latest_data = parsed_data
+        except Exception as e:
+            error_logger.error(f"Error decoding BLE packet: {e}")
             
-    async def stream_data(self):
-        """Async generator that yields scanned BLE packets."""
-        self.running = True
+    async def start_scanning(self):
+        """Starts the scanner ONCE."""
+        if self._scanner: return # Already running
+        
+        info_logger.info(f"STARTUP: Starting Global BLE Scanner for {self.mac_target}...")
         self._scanner = BleakScanner(self._detection_callback)
-        info_logger.info(f"Starting BLE scan for {self.mac_target}...")
-    
-        try:
-            await self._scanner.start()
-            while self.running:
-                try:
-                    # Wait for data from callback queue with a timeout to check if stopped running
-                    packet = await asyncio.wait_for(self._queue.get(), timeout=1.0)
-                    yield packet
-                except asyncio.TimeoutError:
-                    continue
-        except asyncio.CancelledError:
-            info_logger.info("BLE scanning cancelled.")
-        finally:
-            await self._scanner.stop()
-            info_logger.info("BLE Scanner stopped.")
+        await self._scanner.start()
 
-    def stop(self):
-        self.running = False
+    async def stop_scanning(self):
+        """Stops the scanner."""
+        if self._scanner:
+            info_logger.info("SHUTDOWN: Stopping BLE Scanner...")
+            await self._scanner.stop()
+            self._scanner = None
 
 class MockRuuviSensor:
     def __init__(self, mac_address: str = "AA:BB:CC:DD:EE:FF"):
         """Simulates a RuuviTag sensor."""
         self.mac = mac_address
-        
-        # Initialize base values
-        self._temp = 0.0
-        self._hum = 45.0  
-        self._pres = 1013.0 # standard atmospheric pressure
-        self._batt = 3050  # fresh battery (mV)
-        
-        self.running = False
+        self._temp = 20.0
+        self._hum = 45.0
+        self._pres = 1013.0
+        self._batt = 3000
+        self._latest_data = None
+        self._running = False
+        self._task = None
 
-    def _random_walk(self, current_val, step_size, min_val, max_val, decimal_places=2):
-        """Apply a small step to current value to mimic a stochastic process"""
-        if random.random() > 0.95:
-            return current_val # Randomly skip change (approx one in 20th)
+    @property
+    def latest_data(self) -> SensorData | None:
+        return self._latest_data
 
-        # Up of down
-        step = random.uniform(-step_size, step_size)
+    def _random_walk(self, val, step, min_v, max_v):
+        """Helper to simulate sensor drift"""
+        change = random.uniform(-step, step)
+        return max(min_v, min(val + change, max_v))
 
-        # Random scaling
-        scale_p = random.random()
-        step *= 3 if scale_p > 0.98 else 2 if scale_p > 0.95 else 1
-
-        new_val = current_val + step
-
-        # Ensure we stay within physical limits
-        new_val = max(min_val, min(new_val, max_val))
-        return round(new_val, decimal_places)
-
-    async def stream_data(self, interval: float = 0.2):
-        """Async generator that yields a new data packet continuously based on the previous state."""
-        self.running = True
-
-        info_logger.info(f"Starting scan for Mock Ruuvi Sensor")
-        while self.running:
-            # Apply random walk to temperature, humidity and pressure
-            self._temp = self._random_walk(self._temp, step_size=0.1, min_val=-35, max_val=35)
-            self._hum = self._random_walk(self._hum, step_size=0.5, min_val=0, max_val=100)
-            self._pres = self._random_walk(self._pres, step_size=0.05, min_val=950, max_val=1050)
+    async def _simulation_loop(self):
+        """Background task that updates data every 1s."""
+        while self._running:
+            self._temp = self._random_walk(self._temp, 0.1, -30, 50)
+            self._hum = self._random_walk(self._hum, 0.5, 0, 100)
+            self._pres = self._random_walk(self._pres, 0.1, 950, 1050)
             
-            # Simulate slow battery drain
-            if random.random() > 0.98: 
-                self._batt -= 1
-                
-            # Simulate RSSI fluctuation
-            rssi_val = random.randint(-90, -55)
-
-            packet = SensorData(
+            # Update the shared state
+            self._latest_data = SensorData(
                 mac=self.mac,
-                humidity=self._hum,
-                temperature=self._temp,
-                pressure=self._pres,
+                temperature=round(self._temp, 2),
+                humidity=round(self._hum, 2),
+                pressure=round(self._pres, 2),
                 battery=self._batt,
-                rssi=rssi_val,
+                rssi=random.randint(-90, -60),
                 timestamp=datetime.now(timezone.utc)
             )
+            await asyncio.sleep(1) # Update rate
 
-            yield packet
+    async def start_scanning(self):
+        info_logger.info("STARTUP: Starting Mock Sensor Loop...")
+        self._running = True
+        # Start the simulation loop in the background
+        self._task = asyncio.create_task(self._simulation_loop())
 
-            # Non-blocking sleep allowing other services to run
-            await asyncio.sleep(interval)
-
-    def stop(self):
-        self.running = False
+    async def stop_scanning(self):
+        info_logger.info("SHUTDOWN: Stopping Mock Sensor Loop...")
+        self._running = False
+        if self._task:
+            await self._task
 
 # Global singleton instance of the sensor
 _sensor_instance = None
@@ -171,7 +150,6 @@ _sensor_instance = None
 def get_sensor_service():
     """Return a singleton instance"""
     global _sensor_instance
-
     if _sensor_instance:
         return _sensor_instance
 
@@ -180,11 +158,8 @@ def get_sensor_service():
     
     if is_production:
         ruuvi_mac = os.getenv("RUUVI_MAC")
-        
-        info_logger.info(f"Initializing Ruuvi Sensor: {ruuvi_mac}")
         _sensor_instance = RuuviSensor(mac_address=ruuvi_mac)
     else:
-        info_logger.info("Initializing Mock Ruuvi Sensor")
         _sensor_instance = MockRuuviSensor()
         
     return _sensor_instance
