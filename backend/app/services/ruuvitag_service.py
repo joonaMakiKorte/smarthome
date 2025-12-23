@@ -25,6 +25,7 @@ class RuuviSensor:
     @property
     def latest_data(self) -> Optional[SensorData]:
         """Read-only access to the latest known data."""
+        return self._latest_data
 
     def _decode_data(self, raw_data: bytes, rssi: int, device_mac: str) -> SensorData:
         """Decodes Ruuvi Raw Format 5 (RAWv2)"""
