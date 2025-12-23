@@ -6,6 +6,9 @@ import os
 from dotenv import load_dotenv
 from typing import Optional
 from datetime import datetime
+import logging
+
+logger = logging.getLogger("uvicorn.error")
 
 # Network config
 load_dotenv()
@@ -123,7 +126,7 @@ async def _get_wifi_status():
             signal_quality = int((current / total) * 100)
     
     except Exception as e:
-        print(f"WiFi Error: {e}")
+        logger.error(f"WiFi Error: {e}")
     
     return connected, ssid, signal_quality
 
@@ -155,7 +158,7 @@ async def _perform_ping(host: str, count=1):
         return latency, packet_loss
 
     except Exception as e:
-        print(f"Ping Error: {e}")
+        logger.error(f"Ping Error: {e}")
         return None, 100.0
     
 async def _measure_server_traffic():
