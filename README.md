@@ -124,12 +124,81 @@ SSH into your Raspberry Pi and set up the project folder. You do not need the so
 
 ### Environment Variables
 Create a `.env` file in the `backend/` directory (for dev) or project root (for prod) with the following keys:
+```Ini
+# API keys
+TODOIST_API_KEY=...
+OPENWEATHER_API_KEY=...
+TWELVEDATA_API_KEY=...
+DIGITRANSIT_API_KEY=...
 
+# Weather location coordinates
+LAT=...
+LON=...
+
+# Network settings
+ROUTER_IP=... # LAN address
+INTERNET_TARGET=1.1.1.1 # WAN address, Cloudflare DNS for default
+WIFI_INTERFACE=wlan0 # WiFi interface of the device, wlan0 for the Pi
+
+RUUVI_MAC=... # Your sensor MAC address
+
+APP_ENV=development # IMPORTANT, set to 'production' on Pi
+```
+
+### Production `docker-compose.yml`
+Create the following `docker-compose.yml` file in the project root for Pi:
+```YAML
+services:
+  backend:
+    image: your_username/smarthome_backend:latest
+    container_name: smarthome_backend
+    restart: unless-stopped
+    network_mode: host
+    privileged: true
+    volumes:
+      - /var/run/dbus:/var/run/dbus
+      - ./data:/app/data
+    env_file:
+      - .env
+    environment:
+      - DBUS_SYSTEM_BUS_ADDRESS=unix:path=/var/run/dbus/system_bus_socket
+      - PYTHONUNBUFFERED=1
+      - DB_FILE=data/database.db
+
+  frontend:
+    image: your_username/smarthome_frontend:latest
+    container_name: smarthome_frontend
+    restart: unless-stopped
+    network_mode: host
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    # Check for updates every hour (3600 seconds)
+    command: --interval 3600
+
+networks:
+  default:
+    driver: bridge
+```
 
 ## Testing
 The project uses **pytest** to validate the logic of each widget independently, mocking API responses to ensure stability without relying on external services during CI/CD.
+- To disable caching during unit tests, create the following `pytest.ini` file in the `backend/` folder:
+   ```Ini
+   [pytest]
+   env = 
+       TESTING=True
+   ```
+   
 ```bash
-# Example: Run all unit tests locally
+# Example: running all unit tests
 cd backend
 pytest
 ```
+
+## License
+Distributed under the MIT License. See `LICENSE` for more information.
