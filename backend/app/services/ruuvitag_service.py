@@ -101,12 +101,12 @@ class MockRuuviSensor:
         self._hum = 45.0
         self._pres = 1013.0
         self._batt = 3000
-        self._latest_data = None
+        self._latest_data: Optional[SensorData] = None
         self._running = False
         self._task = None
 
     @property
-    def latest_data(self) -> SensorData | None:
+    def latest_data(self) -> Optional[SensorData]:
         return self._latest_data
 
     def _random_walk(self, val, step, min_v, max_v):
@@ -116,22 +116,25 @@ class MockRuuviSensor:
 
     async def _simulation_loop(self):
         """Background task that updates data every 1s."""
-        while self._running:
-            self._temp = self._random_walk(self._temp, 0.1, -30, 50)
-            self._hum = self._random_walk(self._hum, 0.5, 0, 100)
-            self._pres = self._random_walk(self._pres, 0.1, 950, 1050)
-            
-            # Update the shared state
-            self._latest_data = SensorData(
-                mac=self.mac,
-                temperature=round(self._temp, 2),
-                humidity=round(self._hum, 2),
-                pressure=round(self._pres, 2),
-                battery=self._batt,
-                rssi=random.randint(-90, -60),
-                timestamp=datetime.now(timezone.utc)
-            )
-            await asyncio.sleep(1) # Update rate
+        try:
+            while self._running:
+                self._temp = self._random_walk(self._temp, 0.1, -30, 50)
+                self._hum = self._random_walk(self._hum, 0.5, 0, 100)
+                self._pres = self._random_walk(self._pres, 0.1, 950, 1050)
+                
+                # Update the shared state
+                self._latest_data = SensorData(
+                    mac=self.mac,
+                    temperature=round(self._temp, 2),
+                    humidity=round(self._hum, 2),
+                    pressure=round(self._pres, 2),
+                    battery=self._batt,
+                    rssi=random.randint(-90, -60),
+                    timestamp=datetime.now(timezone.utc)
+                )
+                await asyncio.sleep(1) # Update rate
+        except Exception as e:
+            error_logger.error(f"RuuviTag Simulation loop crashed: {e}")
 
     async def start_scanning(self):
         info_logger.info("STARTUP: Starting Mock Sensor Loop...")

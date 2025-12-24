@@ -18,10 +18,9 @@ async def websocket_endpoint(websocket: WebSocket):
     try:
         info_logger.info("RuuviTag WebSocket connected.")
         while True:
-            data = service.latest_data     
+            data = service.latest_data    
             if data:
                 await websocket.send_text(data.model_dump_json())
-            
             # Wait 1 second for rate limiting
             await asyncio.sleep(1)
     except WebSocketDisconnect:
