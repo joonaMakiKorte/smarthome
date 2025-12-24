@@ -130,22 +130,24 @@ onMounted(() => {
   <div class="h-full w-full flex flex-col bg-slate-800 rounded-3xl border border-slate-700 shadow-xl overflow-hidden select-none">
     
     <div class="bg-slate-900/50 border-b border-slate-700 flex flex-col">
-      <div class="p-4 flex justify-between items-center">
-        <h2 class="text-lg font-bold text-white flex items-center gap-2">
+      <div class="p-5 flex justify-between items-center">
+        <h2 class="text-xl font-bold text-white flex items-center gap-3">
           <span>Tasks</span>
-          <span class="bg-blue-900 text-blue-200 text-xs px-2 py-0.5 rounded-full">
+          <span class="bg-blue-900 text-blue-200 text-sm px-2.5 py-0.5 rounded-full font-mono">
             {{ currentTab === 'active' ? activeTodos.length : completedTodos.length }}
           </span>
         </h2>
-        <button @click="fetchAll" class="text-slate-500 hover:text-white transition-colors" title="Force Refresh">
-          ↻
+        <button @click="fetchAll" class="text-slate-500 hover:text-white transition-colors p-1" title="Force Refresh">
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor" class="w-5 h-5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+          </svg>
         </button>
       </div>
 
       <div class="flex text-sm font-medium">
         <button 
           @click="currentTab = 'active'"
-          class="flex-1 py-3 text-center transition-colors border-b-2"
+          class="flex-1 py-3 text-center transition-colors border-b-2 text-base"
           :class="currentTab === 'active' 
             ? 'text-blue-400 border-blue-500 bg-slate-800' 
             : 'text-slate-500 border-transparent hover:bg-slate-800/50 hover:text-slate-300'"
@@ -154,7 +156,7 @@ onMounted(() => {
         </button>
         <button 
           @click="currentTab = 'completed'"
-          class="flex-1 py-3 text-center transition-colors border-b-2"
+          class="flex-1 py-3 text-center transition-colors border-b-2 text-base"
           :class="currentTab === 'completed' 
             ? 'text-green-400 border-green-500 bg-slate-800' 
             : 'text-slate-500 border-transparent hover:bg-slate-800/50 hover:text-slate-300'"
@@ -170,16 +172,16 @@ onMounted(() => {
       @mouseleave="onMouseLeave"
       @mouseup="onMouseUp"
       @mousemove="onMouseMove"
-      class="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-2 relative"
+      class="flex-1 overflow-y-auto p-0 pb-2 scrollbar-hide relative cursor-grab active:cursor-grabbing"
     >
       
       <div v-if="isLoading && activeTodos.length === 0" class="absolute inset-0 flex items-center justify-center bg-slate-800 z-10">
-        <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500"></div>
+        <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
       </div>
 
       <template v-if="currentTab === 'active'">
         <div v-if="activeTodos.length === 0" class="flex flex-col items-center justify-center py-12 text-slate-500 space-y-4 h-full min-h-[200px]">
-          <span class="italic text-sm">No active tasks. Relax!</span>
+          <span class="italic text-base">No active tasks. Relax!</span>
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1" stroke="currentColor" class="w-24 h-24 opacity-20">
             <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
           </svg>
@@ -188,13 +190,14 @@ onMounted(() => {
         <div 
           v-for="task in activeTodos" 
           :key="task.id" 
-          class="p-3 rounded-xl border flex justify-between items-center group transition-all duration-200 hover:scale-[1.01]"
+          class="p-4 rounded-2xl border flex justify-between items-center group transition-all duration-200 hover:scale-[1.01] hover:shadow-lg"
           :class="getPriorityStyles(task.priority)"
         >
-          <span class="text-slate-200 text-sm font-medium truncate mr-2 drop-shadow-sm">{{ task.content }}</span>
+          <span class="text-slate-200 text-lg font-medium truncate mr-3 drop-shadow-sm">{{ task.content }}</span>
+          
           <button 
             @click.stop="handleComplete(task)"
-            class="shrink-0 bg-slate-800/80 backdrop-blur-sm text-slate-400 border border-slate-600 hover:bg-green-600 hover:text-white hover:border-green-500 px-3 py-1 rounded-lg text-xs font-bold transition-all"
+            class="shrink-0 bg-slate-800/80 backdrop-blur-sm text-slate-300 border border-slate-600 hover:bg-green-600 hover:text-white hover:border-green-500 px-4 py-2 rounded-xl text-sm font-bold transition-all shadow-sm"
           >
             Done
           </button>
@@ -203,7 +206,7 @@ onMounted(() => {
 
       <template v-if="currentTab === 'completed'">
         <div v-if="completedTodos.length === 0" class="flex flex-col items-center justify-center py-12 text-slate-500 space-y-4 h-full min-h-[200px]">
-          <span class="italic text-sm">No history available.</span>
+          <span class="italic text-base">No history available.</span>
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1" stroke="currentColor" class="w-24 h-24 opacity-20">
             <path stroke-linecap="round" stroke-linejoin="round" d="M20.25 7.5l-.625 10.632a2.25 2.25 0 01-2.247 2.118H6.622a2.25 2.25 0 01-2.247-2.118L3.75 7.5M10 11.25h4M3.375 7.5h17.25c.621 0 1.125-.504 1.125-1.125v-1.5c0-.621-.504-1.125-1.125-1.125H3.375c-.621 0-1.125.504-1.125 1.125v1.5c0 .621.504 1.125 1.125 1.125z" />
           </svg>
@@ -212,15 +215,16 @@ onMounted(() => {
         <div 
           v-for="task in completedTodos" 
           :key="task.id" 
-          class="bg-slate-800/30 p-3 rounded-xl border border-slate-700/30 flex justify-between items-center opacity-75 group hover:opacity-100 transition-opacity"
+          class="bg-slate-800/40 p-4 rounded-2xl border border-slate-700/50 flex justify-between items-center opacity-60 hover:opacity-100 transition-all duration-300"
         >
           <div class="flex items-center gap-3 overflow-hidden">
-            <span class="text-green-500 text-sm">✓</span>
-            <span class="text-slate-400 text-sm line-through truncate">{{ task.content }}</span>
+            <span class="text-green-500 font-bold text-lg">✓</span>
+            <span class="text-slate-400 text-base line-through truncate">{{ task.content }}</span>
           </div>
+          
           <button 
             @click.stop="handleReopen(task)"
-            class="shrink-0 text-xs text-slate-600 hover:text-blue-400 px-2 py-1"
+            class="shrink-0 bg-slate-900/50 border border-slate-700 text-slate-400 hover:text-blue-200 hover:bg-blue-900/50 hover:border-blue-700 px-4 py-2 rounded-xl text-sm font-medium transition-all"
           >
             Reopen
           </button>

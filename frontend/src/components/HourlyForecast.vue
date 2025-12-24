@@ -113,14 +113,14 @@ const themeClasses = computed(() => {
     };
   }
   
-  // Morning (06:00 - 10:00) - Light Blue/Cyan
+  // Morning (06:00 - 10:00) - Heavy Mist/Overcast
   if (h >= 6 && h <= 10) {
     return {
-      container: 'bg-gradient-to-br from-sky-400 via-sky-300 to-blue-300',
-      text: 'text-white',
-      subText: 'text-blue-50',
-      overlayLeft: 'from-sky-400/90',
-      overlayRight: 'from-blue-300/90'
+      container: 'bg-gradient-to-br from-slate-500 via-gray-400 to-slate-400',
+      text: 'text-white', 
+      subText: 'text-gray-200',
+      overlayLeft: 'from-slate-500/90',
+      overlayRight: 'from-slate-400/90'
     };
   }
 
@@ -135,13 +135,13 @@ const themeClasses = computed(() => {
     };
   }
 
-  // Evening/Sunset (17:00 - 20:00) - Indigo/Purple
+  // Evening (16:00 - 21:00) Deep Blue/Purple
   return {
-    container: 'bg-gradient-to-br from-indigo-500 via-purple-600 to-indigo-800',
+    container: 'bg-gradient-to-br from-blue-700 via-purple-700 to-slate-900',
     text: 'text-white',
-    subText: 'text-indigo-200',
-    overlayLeft: 'from-indigo-500/90',
-    overlayRight: 'from-indigo-800/90'
+    subText: 'text-indigo-200', 
+    overlayLeft: 'from-blue-900/30', 
+    overlayRight: 'from-slate-900/40'
   };
 });
 
