@@ -116,7 +116,7 @@ const hasTomorrowData = computed(() => {
   
   const tomorrowData = allData.filter(d => new Date(d.time).toDateString() === tomorrowStr);
   
-  // Only enambe 'Tomorrow' button if we have the full dataset
+  // Only enable 'Tomorrow' button if we have the full dataset
   return isFullDay(tomorrowData.length, interval);
 });
 
@@ -244,10 +244,10 @@ const startPolling = () => {
       fetchAvg();
     }
 
-    // Check for new data during 14:02-16:00
+    // Check for new data after 14:02 until data is found
     const pollStart = new Date();
     pollStart.setHours(14, 2, 0, 0);
-    if (current >= pollStart && current.getHours() < 16 && !hasTomorrowData.value && !isLoading.value) {
+    if (current >= pollStart && !hasTomorrowData.value && !isLoading.value) {
       fetchData('1h', true); 
       fetchData('15min', true);
     }

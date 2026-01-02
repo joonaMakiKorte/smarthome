@@ -16,6 +16,10 @@ const isLoading = ref(false); // Base loader for initial mount
 const isDetailLoading = ref(false); // Specific loader for detailed view
 const isInitialHistoryLoaded = ref(false); // Gatekeeper state
 
+// Track last successful fetch times
+const lastQuoteFetchTime = ref<number>(0);
+const lastHistoryFetchTime = ref<number>(0);
+
 let schedulerTimer: ReturnType<typeof setInterval> | null = null;
 
 const scrollContainer = ref<HTMLElement | null>(null);
@@ -58,6 +62,10 @@ const fetchQuotes = async(forced: boolean = false) => {
       newQuotes[quote.symbol] = quote;
     }
     stockQuotes.value = newQuotes;
+
+    // Update timestamp only if this was a full fetch
+    if (!forced) lastQuoteFetchTime.value = Date.now();
+
   } catch (err) {
     console.error("Failed to update quotes", err);
   }
@@ -89,6 +97,9 @@ const fetchHistory = async(forced: boolean = false) => {
       historyBucket[data.symbol] = data.history;
     }
     stockHistory.value[interval] = historyBucket;
+
+    if (!forced) lastHistoryFetchTime.value = Date.now();
+
   } catch (err) {
     console.error("Fetching history failed", err);
   } finally {
@@ -125,6 +136,20 @@ const isMarketOpen = (): boolean => {
   if (day === 'Sat' || day === 'Sun') return false;
   const currentMins = hour * 60 + minute;
   return currentMins >= MARKET_OPEN_MIN && currentMins < MARKET_CLOSE_MIN + CLOSE_OFFSET;
+};
+
+// Check if we missed the closing bell 
+const needsClosingFetch = () => {
+  if (isMarketOpen()) return false; 
+
+  const now = new Date();
+  // Ensure it's a weekday
+  const day = now.getDay();
+  if (day === 0 || day === 6) return false; 
+
+  // Check if prev quote is older than 45 mins
+  const timeSinceLastFetch = Date.now() - lastQuoteFetchTime.value;
+  return timeSinceLastFetch > (45 * 60 * 1000); 
 };
 
 // Helper to check if we are at polling deadzone -> no data at this window when market open
@@ -231,39 +256,44 @@ const onMouseMove = (e: MouseEvent) => {
 
 // --- Lifecycle ---
 
-const QUOTE_INTERVAL_MIN = 10;
-const HISTORY_INTERVAL_MIN = 15;
-const HISTORY_FETCH_OFFSET = 2;
+const QUOTE_INTERVAL_MS = 10 * 60 * 1000; // 10 minutes
+const HISTORY_INTERVAL_MS = 15 * 60 * 1000; // 15 minutes
+const OFFSET_MS = 2 * 60 * 1000; // 2 minutes
 const runScheduler = async () => {
-  if (!isMarketOpen()) return;
-  const now = new Date();
-  const minutes = now.getMinutes();
+  const active = isMarketOpen();
+  const catchup = needsClosingFetch();
 
-  if (minutes % QUOTE_INTERVAL_MIN === 0) {
+  // Return if market is closed and we have fresh enough data
+  if (!active && !catchup) return;
+
+  const now = Date.now();
+  const timeSinceQuote = now - lastQuoteFetchTime.value;
+  const timeSinceHistory = now - lastHistoryFetchTime.value;
+
+  if (timeSinceQuote >= QUOTE_INTERVAL_MS) {
     await fetchQuotes();
+    return; // Return to respect the API limit
   }
 
-  if (minutes % HISTORY_INTERVAL_MIN === HISTORY_FETCH_OFFSET) {
-    if (!isDeadZone()) {
-      await fetchHistory();
-    }
+  // Ensure we are not in deadzone and fetch offset is passed to get history
+  const isHistoryDue = timeSinceHistory >= HISTORY_INTERVAL_MS;
+  const isSafeOffset = timeSinceQuote >= OFFSET_MS;
+
+  if (isHistoryDue && isSafeOffset && !isDeadZone()) {
+     await fetchHistory();
   }
 };
 
 const startPolling = () => {
   if (schedulerTimer) clearInterval(schedulerTimer);
-  const msToNextMinute = 60000 - (new Date().getTime() % 60000);
-  const jitter = Math.floor(Math.random() * 5000);
-  
-  setTimeout(() => {
-    runScheduler();
-    schedulerTimer = setInterval(runScheduler, 60000);
-  }, msToNextMinute + jitter);
+  runScheduler();
+  schedulerTimer = setInterval(runScheduler, 60000);
 };
 
 onMounted(async () => {
   isLoading.value = true;
   await fetchWatchlist();
+  
   await fetchQuotes().finally(() => isLoading.value = false);
   
   // API has 8 tokens/min limit, meaning history fetch must be delayed for over 4 symbol watchlist
