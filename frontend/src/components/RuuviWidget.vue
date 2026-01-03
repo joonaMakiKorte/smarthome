@@ -15,12 +15,10 @@ const pressureHistory = ref<number[]>([]);
 let socket: WebSocket | null = null;
 let throttleTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 let healthCheckTimer: ReturnType<typeof setInterval> | null = null;
 
 const lastMessageAt = ref(Date.now());
-let intentionalClose = false; // Prevent race conditions when closing connection
 
 // --- WebSocket ---
 
@@ -30,18 +28,10 @@ const host = window.location.host;
 const URL = `${protocol}//${host}/api/ruuvitag/ws`;
 
 const THROTTLE_MS = 2000; // Update UI every 2 seconds
-const WATCHDOG_MS = 120000; // If silence for 2min, assume dead
 const RECONNECT_MS = 3000; // Try reconnecting every 3s
 const HEARTBEAT_MS = 20000; // Send a ping every 20s to keep WiFi radio active
-const HEALTHCHECK_MS = 30000; // Health check every 30s
-
-const resetWatchdog = () => {
-  if (watchdogTimer) clearTimeout(watchdogTimer);
-  watchdogTimer = setTimeout(() => {
-    console.warn("Watchdog timeout: Connection stale. Force closing.");
-    socket?.close(4000, "Watchdog timeout");
-  }, WATCHDOG_MS);
-};
+const HEALTHCHECK_MS = 10000; // Health check every 10s
+const MAX_SILENCE_MS = 45000; // Allow 45s of silence before killing
 
 const startHeartbeat = () => {
   if (heartbeatTimer) clearInterval(heartbeatTimer);
@@ -56,16 +46,16 @@ const startHeartbeat = () => {
 const startHealthCheck = () => {
   if (healthCheckTimer) clearInterval(healthCheckTimer);
   healthCheckTimer = setInterval(() => {
-    if (Date.now() - lastMessageAt.value > WATCHDOG_MS) {
+    if (Date.now() - lastMessageAt.value > MAX_SILENCE_MS) {
       console.warn('Health check failed — no data received');
-      socket?.close(4001, 'Health check timeout');
+      connect();
     }
   }, HEALTHCHECK_MS);
 };
 
 const connect = () => {
   // Cleanup
-  reconnectTimer && clearTimeout(reconnectTimer);
+  if (reconnectTimer) clearTimeout(reconnectTimer);
   reconnectTimer = null;
 
   if (socket) {
@@ -79,9 +69,6 @@ const connect = () => {
 
   // Update State
   isConnected.value = false;
-  tempHistory.value.length = 0;
-  humidityHistory.value.length = 0;
-  pressureHistory.value.length = 0;
 
   // New Connection
   socket = new WebSocket(URL);
@@ -90,14 +77,13 @@ const connect = () => {
     console.log('WebSocket connected');
     isConnected.value = true;
     lastMessageAt.value = Date.now();
-    resetWatchdog();
+
     startHeartbeat();
     startHealthCheck();
   };
 
   socket.onmessage = (event) => {
     lastMessageAt.value = Date.now();
-    resetWatchdog();
 
     if (event.data === 'pong') return;
 
@@ -127,23 +113,18 @@ const connect = () => {
     console.warn('WebSocket closed', e.code, e.reason);
     isConnected.value = false;
 
-    watchdogTimer && clearTimeout(watchdogTimer);
-    heartbeatTimer && clearInterval(heartbeatTimer);
-    healthCheckTimer && clearInterval(healthCheckTimer);
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
 
-    if (!intentionalClose && !reconnectTimer) {
+    if (!reconnectTimer) {
       reconnectTimer = setTimeout(() => {
         reconnectTimer = null;
         connect();
       }, RECONNECT_MS);
     }
-
-    intentionalClose = false;
   };
 
   socket.onerror = (err) => {
     console.error("WebSocket error", err);
-    socket?.close();
   };
 };
 
@@ -162,17 +143,9 @@ const calculateAverage = (arr: number[]) => {
   return arr.reduce((a, b) => a + b, 0) / arr.length;
 };
 
-const averagedTemperature = computed(() => {
-  return calculateAverage(tempHistory.value).toFixed(1);
-});
-
-const averagedHumidity = computed(() => {
-  return calculateAverage(humidityHistory.value).toFixed(1);
-});
-
-const averagedPressure = computed(() => {
-  return calculateAverage(pressureHistory.value).toFixed(0);
-});
+const averagedTemperature = computed(() => calculateAverage(tempHistory.value).toFixed(1));
+const averagedHumidity = computed(() => calculateAverage(humidityHistory.value).toFixed(1));
+const averagedPressure = computed(() => calculateAverage(pressureHistory.value).toFixed(0));
 
 // --- UI Helpers ---
 
@@ -182,7 +155,6 @@ const batteryPercentage = computed(() => {
   const mv = displayData.value.battery;
   const max = 3000;
   const min = 2000;
-  
   let pct = ((mv - min) / (max - min)) * 100;
   return Math.min(Math.max(pct, 0), 100).toFixed(0);
 });
@@ -192,20 +164,17 @@ const RSSI_THRESHOLDS = [-85, -75, -65, -55];
 const signalBars = computed(() => {
   if (!displayData.value) return 0;
   const dbm = displayData.value.rssi;
-  let bars = 0;
-  if (dbm > RSSI_THRESHOLDS[3]) bars = 4;
-  else if (dbm > RSSI_THRESHOLDS[2]) bars = 3;
-  else if (dbm > RSSI_THRESHOLDS[1]) bars = 2;
-  else if (dbm > RSSI_THRESHOLDS[0]) bars = 1;
-  return bars;
+  if (dbm > RSSI_THRESHOLDS[3]) return 4;
+  if (dbm > RSSI_THRESHOLDS[2]) return 3;
+  if (dbm > RSSI_THRESHOLDS[1]) return 2;
+  if (dbm > RSSI_THRESHOLDS[0]) return 1;
+  return 0;
 });
 
 // --- Lifecycle ---
 
 const handleVisibilityChange = () => {
   if (document.visibilityState === 'visible') {
-    intentionalClose = true;
-    socket?.close(4002, 'Screen wake refresh');
     connect();
   }
 };
@@ -217,12 +186,14 @@ onMounted(() => {
 
 onUnmounted(() => {
   document.removeEventListener('visibilitychange', handleVisibilityChange);
-  reconnectTimer && clearTimeout(reconnectTimer);
-  watchdogTimer && clearTimeout(watchdogTimer);
-  heartbeatTimer && clearInterval(heartbeatTimer);
-  healthCheckTimer && clearInterval(healthCheckTimer);
-  socket?.close();
-  socket = null;
+  if (reconnectTimer) clearTimeout(reconnectTimer);
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  if (healthCheckTimer) clearInterval(healthCheckTimer);
+  if (socket) {
+    socket.onclose = null; // Prevent reconnect loop during unmount
+    socket.close();
+    socket = null;
+  }
 });
 
 </script>
