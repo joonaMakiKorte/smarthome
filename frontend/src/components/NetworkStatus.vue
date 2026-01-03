@@ -78,7 +78,6 @@ onMounted(() => {
         
         <div class="flex items-center gap-3 overflow-hidden">
             <div class="relative flex-shrink-0 flex h-3 w-3">
-              <span v-if="isOnline" class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
               <span class="relative inline-flex rounded-full h-3 w-3 transition-colors duration-300"
                 :class="isOnline ? 'bg-green-500 shadow-[0_0_12px_rgba(74,222,128,0.8)]' : 'bg-red-600 shadow-[0_0_12px_rgba(220,38,38,0.8)]'">
               </span>
@@ -90,8 +89,7 @@ onMounted(() => {
         </div>
 
         <div class="flex-shrink-0">
-            <svg class="w-8 h-8 transition-colors duration-300"
-                 :class="signalColorClass"
+            <svg class="w-8 h-8 text-white"
                  viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
               <path d="M12 20h.01" stroke-width="4"/>
               <path d="M8.5 16.5a5 5 0 0 1 7 0" :class="{'opacity-20': currentHealth.signal_quality < 25}" />

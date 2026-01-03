@@ -32,6 +32,7 @@ const RECONNECT_MS = 3000; // Try reconnecting every 3s
 const HEARTBEAT_MS = 20000; // Send a ping every 20s to keep WiFi radio active
 const HEALTHCHECK_MS = 10000; // Health check every 10s
 const MAX_SILENCE_MS = 45000; // Allow 45s of silence before killing
+const FLUSH_THRESHOLD_MS = 15000; // If we've been gone for >15s, flush buffers
 
 const startHeartbeat = () => {
   if (heartbeatTimer) clearInterval(heartbeatTimer);
@@ -73,8 +74,16 @@ const connect = () => {
     socket = null;
   }
 
+  // Handle stale data
+  if (Date.now() - lastMessageAt.value > FLUSH_THRESHOLD_MS) {
+    tempHistory.value = [];
+    humidityHistory.value = [];
+    pressureHistory.value = [];
+  }
+
   // Update State
   isConnected.value = false;
+  lastMessageAt.value = Date.now();
 
   // New Connection
   socket = new WebSocket(URL);
@@ -137,7 +146,7 @@ const connect = () => {
 
 // --- Helpers ---
 
-const HISTORY_SIZE = 50; // Ensure smoother data, slower reaction
+const HISTORY_SIZE = 10; // Ensure smoother data, slower reaction
 const updateHistory = (historyRef: any, newValue: number) => {
   historyRef.value.push(newValue);
   if (historyRef.value.length > HISTORY_SIZE) {
