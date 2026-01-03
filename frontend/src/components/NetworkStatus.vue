@@ -79,7 +79,7 @@ onMounted(() => {
         <div class="flex items-center gap-3 overflow-hidden">
             <div class="relative flex-shrink-0 flex h-3 w-3">
               <span class="relative inline-flex rounded-full h-3 w-3 transition-colors duration-300"
-                :class="isOnline ? 'bg-green-500 shadow-[0_0_12px_rgba(74,222,128,0.8)]' : 'bg-red-600 shadow-[0_0_12px_rgba(220,38,38,0.8)]'">
+                :class="isOnline ? 'bg-green-500' : 'bg-red-600'">
               </span>
             </div>
             
