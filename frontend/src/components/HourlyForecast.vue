@@ -9,6 +9,9 @@ const isLoading = ref(false);
 const timerId = ref<ReturnType<typeof setTimeout> | null>(null);
 const currentHour = ref(new Date().getHours());
 
+// Trach when we expect the next update
+const nextScheduledTick = ref<number>(0);
+
 const scrollContainer = ref<HTMLElement | null>(null);
 let isDown = false;
 let startX = 0;
@@ -30,6 +33,7 @@ const fetchForecast = async () => {
     });
 
     forecast.value = cleanForecast; // Update UI immediately
+    currentHour.value = now.getHours();
 
     // Stale check -> ping api until data is fresh, meaning no filtering
     const isStale = hourlyForecast.length !== cleanForecast.length;
@@ -38,8 +42,6 @@ const fetchForecast = async () => {
     } else {
       scheduleNextHourTick();
     }
-
-    scheduleNextHourTick();
 
   } catch (err) {
     console.error("Polling failed", err);
@@ -85,8 +87,12 @@ const scheduleNextHourTick = () => {
       nextTarget.setHours(nextTarget.getHours() + 1);
   }
 
+  nextScheduledTick.value = nextTarget.getTime();
   const msUntilTarget = nextTarget.getTime() - now.getTime();
-  timerId.value = setTimeout(handleHourChange, msUntilTarget);
+
+  timerId.value = setTimeout(() => {
+    handleHourChange();
+  }, msUntilTarget + 2000); // 2 seconds buffer
 };
 
 // Simple retry helper
@@ -147,13 +153,38 @@ const themeClasses = computed(() => {
 
 // --- Lifecycle ---
 
+const handleVisibilityChange = () => {
+  if (document.visibilityState === 'visible') {
+    const now = new Date();
+    currentHour.value = now.getHours();
+
+    // Check if we slept through the scheduled update
+    if (nextScheduledTick.value > 0 && now.getTime() >= nextScheduledTick.value) {
+      handleHourChange(); // Run the hour change logic immediately
+    } 
+    // Forecast is empty or stale
+    else if (forecast.value.length > 0) {
+        const firstItemTime = new Date(forecast.value[0].timestamp).getTime();
+        const currentHourStart = new Date().setMinutes(0,0,0);
+        
+        // Force update if stale
+        if (firstItemTime < currentHourStart) {
+            handleHourChange();
+        }
+    }
+  }
+};
+
 onMounted(() => {
   isLoading.value = true;
   currentHour.value = new Date().getHours();
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+
   fetchForecast().finally(() => isLoading.value = false);
 });
 
 onUnmounted(() => {
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
   if (timerId.value) clearTimeout(timerId.value);
 });
 

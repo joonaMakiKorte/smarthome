@@ -100,6 +100,7 @@ const globalMaxPrice = computed(() => {
     defaults.push(avgPrice.value);
   }
   const rawMax = Math.max(...defaults);
+  if (rawMax === 0) return 5; // Ensure chart isn't flat
 
   const paddedMax = Math.ceil(rawMax * 1.1);
   return Math.ceil(paddedMax / 4) * 4;
@@ -225,13 +226,16 @@ const getPriceColorClass = (price: number) => {
 
 // --- Lifecycle ---
 
-const startPolling = () => {
-  pollInterval = setInterval(() => {
+const updateState = () => {
     const current = new Date();
+    const prevDate = now.value.getDate();
     const prevMinute = now.value.getMinutes();
-    
-    // Day Change
-    if (current.getDate() !== now.value.getDate()) {
+
+    // Update reactive time immediately
+    now.value = current;
+
+    // Handle Midnight Rollover
+    if (current.getDate() !== prevDate) {
       cache.value = {}; 
       selectedDay.value = 'today';
       fetchData('1h', true);
@@ -239,30 +243,38 @@ const startPolling = () => {
       fetchAvg();
     }
 
-    // Poll Average Price (Every 15 mins)
+    // Poll Avg Price (15 min intervals)
     if (current.getMinutes() % 15 === 0 && current.getMinutes() !== prevMinute) {
       fetchAvg();
     }
 
-    // Check for new data after 14:02 until data is found
+    // Check for New Day Data Release (After 14:02)
     const pollStart = new Date();
-    pollStart.setHours(14, 2, 0, 0);
+    pollStart.setHours(14, 2, 0, 0); 
+    
+    // Only fetch if we are in the time window AND we don't have tomorrow's data yet
     if (current >= pollStart && !hasTomorrowData.value && !isLoading.value) {
       fetchData('1h', true); 
       fetchData('15min', true);
     }
-
-    now.value = current;
-  }, 60000); 
 };
 
-watch([displayedData, selectedInterval, selectedDay, now, avgPrice], () => nextTick(drawChart));
+const handleVisibilityChange = () => {
+  if (document.visibilityState === 'visible') {
+     updateState();
+     // Force redraw in case canvas context was lost/suspended
+     nextTick(drawChart); 
+  }
+};
 
 onMounted(() => {
   fetchData('1h');
   fetchData('15min');
   fetchAvg();
-  startPolling();
+
+  document.addEventListener("visibilitychange", handleVisibilityChange);
+
+  pollInterval = setInterval(updateState, 60000);
   
   if (canvasRef.value) {
     resizeObserver = new ResizeObserver(() => drawChart());
@@ -271,9 +283,13 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  document.removeEventListener("visibilitychange", handleVisibilityChange);
   if (resizeObserver) resizeObserver.disconnect();
   if (pollInterval) clearInterval(pollInterval);
 });
+
+watch([displayedData, selectedInterval, selectedDay, now, avgPrice], () => nextTick(drawChart));
+
 </script>
 
 <template>

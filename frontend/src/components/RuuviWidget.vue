@@ -16,6 +16,7 @@ let socket: WebSocket | null = null;
 let throttleTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
+let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
 // --- WebSocket ---
 
@@ -25,28 +26,55 @@ const host = window.location.host;
 const URL = `${protocol}//${host}/api/ruuvitag/ws`;
 
 const THROTTLE_MS = 2000; // Update UI every 2 seconds
-const WATCHDOG_MS = 15000; // If silence for 15s, assume dead
+const WATCHDOG_MS = 45000; // If silence for 45s, assume dead
 const RECONNECT_MS = 3000; // Try reconnecting every 3s
+const HEARTBEAT_MS = 20000; // Send a ping every 20s to keep WiFi radio active
 
 const resetWatchdog = () => {
   if (watchdogTimer) clearTimeout(watchdogTimer);
-  // Force close if no data for 15s
+
   watchdogTimer = setTimeout(() => {
-    console.warn("RuuviTag Watchdog timeout: No data received. Force closing.");
+    console.warn("Watchdog timeout: Connection stale. Force closing.");
+    // Force closing
     if (socket) socket.close(); 
   }, WATCHDOG_MS);
 };
 
+const startHeartbeat = () => {
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  heartbeatTimer = setInterval(() => {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+      // Send data to keep Android WiFi radio from sleeping
+      socket.send('ping'); 
+    }
+  }, HEARTBEAT_MS);
+};
+
 const connect = () => {
-  // Prevent multiple connections
-  if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) return;
+  // Cleanup
+  if (socket) {
+    socket.onopen = null;
+    socket.onmessage = null;
+    socket.onclose = null;
+    socket.onerror = null;
+    
+    // Force close if still open
+    if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+      socket.close();
+    }
+  }
 
   socket = new WebSocket(URL);
 
   socket.onopen = () => {
     isConnected.value = true;
     resetWatchdog();
-    if (reconnectTimer) clearTimeout(reconnectTimer);
+    startHeartbeat();
+
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
   };
 
   socket.onmessage = (event) => {
@@ -76,6 +104,7 @@ const connect = () => {
   socket.onclose = () => {
     isConnected.value = false;
     if (watchdogTimer) clearTimeout(watchdogTimer);
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
 
     // Auto-Reconnect
     if (!reconnectTimer) {
@@ -88,7 +117,6 @@ const connect = () => {
 
   socket.onerror = (err) => {
     console.error("WebSocket error", err);
-    socket?.close(); // Force close to trigger reconnect
   };
 };
 
@@ -153,6 +181,8 @@ const handleVisibilityChange = () => {
         if (!socket || socket.readyState === WebSocket.CLOSED) {
             connect();
         }
+        // Force a watchdog reset
+        resetWatchdog();
     }
 };
 
@@ -165,6 +195,7 @@ onUnmounted(() => {
   document.removeEventListener("visibilitychange", handleVisibilityChange);
   if (reconnectTimer) clearTimeout(reconnectTimer);
   if (watchdogTimer) clearTimeout(watchdogTimer);
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
   if (socket) socket.close();
 });
 
