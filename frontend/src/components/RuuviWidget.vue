@@ -17,6 +17,9 @@ let throttleTimer: ReturnType<typeof setTimeout> | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 let watchdogTimer: ReturnType<typeof setTimeout> | null = null;
 let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+let healthCheckTimer: ReturnType<typeof setInterval> | null = null;
+
+const lastMessageAt = ref(Date.now());
 
 // --- WebSocket ---
 
@@ -29,56 +32,74 @@ const THROTTLE_MS = 2000; // Update UI every 2 seconds
 const WATCHDOG_MS = 45000; // If silence for 45s, assume dead
 const RECONNECT_MS = 3000; // Try reconnecting every 3s
 const HEARTBEAT_MS = 20000; // Send a ping every 20s to keep WiFi radio active
+const HEALTHCHECK_MS = 10000; // Health check every 10s
 
 const resetWatchdog = () => {
   if (watchdogTimer) clearTimeout(watchdogTimer);
-
   watchdogTimer = setTimeout(() => {
     console.warn("Watchdog timeout: Connection stale. Force closing.");
-    // Force closing
-    if (socket) socket.close(); 
+    socket?.close(4000, "Watchdog timeout");
   }, WATCHDOG_MS);
 };
 
 const startHeartbeat = () => {
   if (heartbeatTimer) clearInterval(heartbeatTimer);
   heartbeatTimer = setInterval(() => {
-    if (socket && socket.readyState === WebSocket.OPEN) {
+    if (socket?.readyState === WebSocket.OPEN) {
       // Send data to keep Android WiFi radio from sleeping
       socket.send('ping'); 
     }
   }, HEARTBEAT_MS);
 };
 
+const startHealthCheck = () => {
+  if (healthCheckTimer) clearInterval(healthCheckTimer);
+  healthCheckTimer = setInterval(() => {
+    if (Date.now() - lastMessageAt.value > WATCHDOG_MS) {
+      console.warn('Health check failed — no data received');
+      socket?.close(4001, 'Health check timeout');
+    }
+  }, HEALTHCHECK_MS);
+};
+
 const connect = () => {
   // Cleanup
+  reconnectTimer && clearTimeout(reconnectTimer);
+  reconnectTimer = null;
+
   if (socket) {
     socket.onopen = null;
     socket.onmessage = null;
     socket.onclose = null;
     socket.onerror = null;
-    
-    // Force close if still open
-    if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
-      socket.close();
-    }
+    socket.close();
+    socket = null;
   }
 
+  // Update State
+  isConnected.value = false;
+  tempHistory.value.length = 0;
+  humidityHistory.value.length = 0;
+  pressureHistory.value.length = 0;
+
+  // New Connection
   socket = new WebSocket(URL);
 
   socket.onopen = () => {
+    console.log('WebSocket connected');
     isConnected.value = true;
+    lastMessageAt.value = Date.now();
     resetWatchdog();
     startHeartbeat();
-
-    if (reconnectTimer) {
-      clearTimeout(reconnectTimer);
-      reconnectTimer = null;
-    }
+    startHealthCheck();
   };
 
   socket.onmessage = (event) => {
+    lastMessageAt.value = Date.now();
     resetWatchdog();
+
+    if (event.data === 'pong') return;
+
     try {
       const parsed: SensorData = JSON.parse(event.data);
       latestData.value = parsed;
@@ -97,16 +118,18 @@ const connect = () => {
         }, THROTTLE_MS);
       }
     } catch (e) {
-      console.error('Parse error', e);
+      console.warn('Parse error', e);
     }
   };
 
-  socket.onclose = () => {
+  socket.onclose = (e) => {
+    console.warn('WebSocket closed', e.code, e.reason);
     isConnected.value = false;
-    if (watchdogTimer) clearTimeout(watchdogTimer);
-    if (heartbeatTimer) clearInterval(heartbeatTimer);
 
-    // Auto-Reconnect
+    watchdogTimer && clearTimeout(watchdogTimer);
+    heartbeatTimer && clearInterval(heartbeatTimer);
+    healthCheckTimer && clearInterval(healthCheckTimer);
+
     if (!reconnectTimer) {
       reconnectTimer = setTimeout(() => {
         reconnectTimer = null;
@@ -117,6 +140,7 @@ const connect = () => {
 
   socket.onerror = (err) => {
     console.error("WebSocket error", err);
+    socket?.close();
   };
 };
 
@@ -176,14 +200,13 @@ const signalBars = computed(() => {
 // --- Lifecycle ---
 
 const handleVisibilityChange = () => {
-    if (document.visibilityState === 'visible') {
-        // If the tab wakes up and socket is dead, reconnect immediately
-        if (!socket || socket.readyState === WebSocket.CLOSED) {
-            connect();
-        }
-        // Force a watchdog reset
-        resetWatchdog();
+  if (document.visibilityState === 'visible') {
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      connect();
+    } else {
+      resetWatchdog();
     }
+  }
 };
 
 onMounted(() => {
@@ -192,11 +215,13 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  document.removeEventListener("visibilitychange", handleVisibilityChange);
-  if (reconnectTimer) clearTimeout(reconnectTimer);
-  if (watchdogTimer) clearTimeout(watchdogTimer);
-  if (heartbeatTimer) clearInterval(heartbeatTimer);
-  if (socket) socket.close();
+  document.removeEventListener('visibilitychange', handleVisibilityChange);
+  reconnectTimer && clearTimeout(reconnectTimer);
+  watchdogTimer && clearTimeout(watchdogTimer);
+  heartbeatTimer && clearInterval(heartbeatTimer);
+  healthCheckTimer && clearInterval(healthCheckTimer);
+  socket?.close();
+  socket = null;
 });
 
 </script>
