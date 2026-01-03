@@ -54,10 +54,16 @@ const startHealthCheck = () => {
 };
 
 const connect = () => {
-  // Cleanup
+  // Clear any timers immediately
   if (reconnectTimer) clearTimeout(reconnectTimer);
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  if (healthCheckTimer) clearInterval(healthCheckTimer);
+  
   reconnectTimer = null;
+  heartbeatTimer = null;
+  healthCheckTimer = null;
 
+  // Cleanup
   if (socket) {
     socket.onopen = null;
     socket.onmessage = null;
@@ -84,7 +90,6 @@ const connect = () => {
 
   socket.onmessage = (event) => {
     lastMessageAt.value = Date.now();
-
     if (event.data === 'pong') return;
 
     try {
@@ -113,7 +118,9 @@ const connect = () => {
     console.warn('WebSocket closed', e.code, e.reason);
     isConnected.value = false;
 
+    // Stop active timers
     if (heartbeatTimer) clearInterval(heartbeatTimer);
+    if (healthCheckTimer) clearInterval(healthCheckTimer);
 
     if (!reconnectTimer) {
       reconnectTimer = setTimeout(() => {
