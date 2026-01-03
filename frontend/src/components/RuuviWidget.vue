@@ -20,6 +20,7 @@ let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 let healthCheckTimer: ReturnType<typeof setInterval> | null = null;
 
 const lastMessageAt = ref(Date.now());
+let intentionalClose = false; // Prevent race conditions when closing connection
 
 // --- WebSocket ---
 
@@ -29,10 +30,10 @@ const host = window.location.host;
 const URL = `${protocol}//${host}/api/ruuvitag/ws`;
 
 const THROTTLE_MS = 2000; // Update UI every 2 seconds
-const WATCHDOG_MS = 45000; // If silence for 45s, assume dead
+const WATCHDOG_MS = 120000; // If silence for 2min, assume dead
 const RECONNECT_MS = 3000; // Try reconnecting every 3s
 const HEARTBEAT_MS = 20000; // Send a ping every 20s to keep WiFi radio active
-const HEALTHCHECK_MS = 10000; // Health check every 10s
+const HEALTHCHECK_MS = 30000; // Health check every 30s
 
 const resetWatchdog = () => {
   if (watchdogTimer) clearTimeout(watchdogTimer);
@@ -130,12 +131,14 @@ const connect = () => {
     heartbeatTimer && clearInterval(heartbeatTimer);
     healthCheckTimer && clearInterval(healthCheckTimer);
 
-    if (!reconnectTimer) {
+    if (!intentionalClose && !reconnectTimer) {
       reconnectTimer = setTimeout(() => {
         reconnectTimer = null;
         connect();
       }, RECONNECT_MS);
     }
+
+    intentionalClose = false;
   };
 
   socket.onerror = (err) => {
@@ -201,11 +204,9 @@ const signalBars = computed(() => {
 
 const handleVisibilityChange = () => {
   if (document.visibilityState === 'visible') {
-    if (!socket || socket.readyState !== WebSocket.OPEN) {
-      connect();
-    } else {
-      resetWatchdog();
-    }
+    intentionalClose = true;
+    socket?.close(4002, 'Screen wake refresh');
+    connect();
   }
 };
 
