@@ -158,20 +158,13 @@ const handleVisibilityChange = () => {
     const now = new Date();
     currentHour.value = now.getHours();
 
-    // Check if we slept through the scheduled update
-    if (nextScheduledTick.value > 0 && now.getTime() >= nextScheduledTick.value) {
-      handleHourChange(); // Run the hour change logic immediately
-    } 
-    // Forecast is empty or stale
-    else if (forecast.value.length > 0) {
-        const firstItemTime = new Date(forecast.value[0].timestamp).getTime();
-        const currentHourStart = new Date().setMinutes(0,0,0);
-        
-        // Force update if stale
-        if (firstItemTime < currentHourStart) {
-            handleHourChange();
-        }
+    // Optimistic UI: instantly remove old hours from list
+    if (forecast.value.length > 0) {
+      const cutoff = new Date().setMinutes(0,0,0);
+      forecast.value = forecast.value.filter(item => new Date(item.timestamp).getTime() >= cutoff);
     }
+
+    fetchForecast(); // Immediate fetch
   }
 };
 

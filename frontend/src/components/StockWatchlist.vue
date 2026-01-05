@@ -278,16 +278,19 @@ const runScheduler = async () => {
   if (!isMarketActive.value && !catchup) return;
 
   const now = Date.now();
-  const timeSinceQuote = now - lastQuoteFetchTime.value;
+  let timeSinceQuote = now - lastQuoteFetchTime.value;
   const timeSinceHistory = now - lastHistoryFetchTime.value;
+  let quoteFetchedThisCycle = false;
 
   if (catchup || timeSinceQuote >= QUOTE_INTERVAL_MS) {
     await fetchQuotes();
+    quoteFetchedThisCycle = true;
+    timeSinceQuote = 0;
   }
 
   // Ensure we are not in deadzone and fetch offset is passed to get history
   const isHistoryDue = timeSinceHistory >= HISTORY_INTERVAL_MS;
-  const isSafeOffset = timeSinceQuote >= OFFSET_MS;
+  const isSafeOffset = !quoteFetchedThisCycle && (timeSinceQuote >= OFFSET_MS);
 
   if (catchup || (isHistoryDue && isSafeOffset && !isDeadZone())) {
      await fetchHistory();
@@ -302,8 +305,18 @@ const startPolling = () => {
 
 const handleVisibilityChange = () => {
   if (document.visibilityState === 'visible') {
-    // Force immediate status update
     isMarketActive.value = isMarketOpen();
+
+    // Check for day change on wakeup
+    const lastFetchDate = new Date(lastHistoryFetchTime.value).getDate();
+    const todayDate = new Date().getDate();
+
+    if (lastFetchDate !== todayDate) {
+      // Flush old data
+      stockHistory.value = {}; 
+      isInitialHistoryLoaded.value = false; 
+    }
+
     runScheduler();
   }
 };
@@ -313,9 +326,7 @@ onMounted(async () => {
   document.addEventListener("visibilitychange", handleVisibilityChange);
 
   await fetchWatchlist();
-  
   isMarketActive.value = isMarketOpen();
-
   await fetchQuotes().finally(() => isLoading.value = false);
   
   // API has 8 tokens/min limit, meaning history fetch must be delayed for over 4 symbol watchlist
